@@ -545,7 +545,9 @@ window.addEventListener("load", () => {
 
 
   
-  el("generateBtn").addEventListener("click", async () => {
+// Generer oppsett (skriver til Firestore)
+el("generateBtn").addEventListener("click", async () => {
+  // DEBUG: skriv et synlig dokument (så vi vet at writes fungerer)
   try {
     setStatus("DEBUG: prøver å skrive til Firestore…");
     await setDoc(sessionRef("debug_from_app"), { ping: Date.now(), from: "generateBtn" }, { merge: true });
@@ -556,27 +558,25 @@ window.addEventListener("load", () => {
     return;
   }
 
-  // resten av generate-logikken din...
+  const pid = el("planId").value.trim() || todayISO();
+  el("planId").value = pid;
+
+  const pin = (el("pin")?.value || "").trim();
+  if (!pin) { setStatus("Skriv inn PIN før du genererer."); return; }
+
+  // Sørg for at vi har en live listener (join) før vi skriver
+  if (!SESSION_ID || PLAN_ID !== pid || PIN !== pin) {
+    await joinSession(pid, pin);
+  }
+
+  const keep = el("keepScore").checked;
+  try {
+    await createOrReplaceSession(keep);
+  } catch (err) {
+    console.error(err);
+    setStatus("Kunne ikke generere oppsett: " + (err?.message || err));
+  }
 });
-    const pid = el("planId").value.trim() || todayISO();
-    el("planId").value = pid;
-
-    const pin = (el("pin")?.value || "").trim();
-    if (!pin) { setStatus("Skriv inn PIN før du genererer."); return; }
-
-    // Sørg for at vi har en live listener (join) før vi skriver
-    if (!SESSION_ID || PLAN_ID !== pid || PIN !== pin) {
-      await joinSession(pid, pin);
-    }
-
-    const keep = el("keepScore").checked;
-    try {
-      await createOrReplaceSession(keep);
-    } catch (err) {
-      console.error(err);
-      setStatus(`Kunne ikke generere oppsett: ${err?.message || err}`);
-    }
-  });
 
   // Ny runde (nullstill kampvalg)
   el("newRoundBtn").addEventListener("click", async () => {
@@ -602,6 +602,7 @@ window.addEventListener("load", () => {
 
   setStatus("Skriv Plan ID + PIN og trykk Join. Deretter kan du generere oppsett.");
 });
+
 
 
 
