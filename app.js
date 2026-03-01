@@ -1,3 +1,25 @@
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyC9fFogpchL6vJbia2s5hh60v8Xie5-kfA",
+  authDomain: "padel-plan-3668b.firebaseapp.com",
+  projectId: "padel-plan-3668b",
+  storageBucket: "padel-plan-3668b.firebasestorage.app",
+  messagingSenderId: "553858373608",
+  appId: "1:553858373608:web:a98772c1412ee0b576365d",
+  measurementId: "G-WS6EL0FWGN"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+
 /* ====== Utils ====== */
 function gcd(a, b) { while (b) [a, b] = [b, a % b]; return Math.abs(a); }
 function pairKey(x, y) { return x < y ? `${x}||${y}` : `${y}||${x}`; }
@@ -506,4 +528,5 @@ window.addEventListener("load", () => {
   } else {
     setStatus(`Lim inn spillere og trykk "Generer oppsett". (Plan ${pid})`);
   }
+
 });
