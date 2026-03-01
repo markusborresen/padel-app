@@ -1,3 +1,5 @@
+console.log("✅ app.js loaded (live)", new Date().toISOString());
+
 // app.js (ES module) – fungerer direkte på GitHub Pages med <script type="module">
 
 /* =========================
@@ -583,3 +585,4 @@ window.addEventListener("load", () => {
 
   setStatus("Skriv Plan ID + PIN og trykk Join. Deretter kan du generere oppsett.");
 });
+
