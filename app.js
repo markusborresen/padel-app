@@ -1,24 +1,4 @@
-// BOOT + FEILVISNING (øverst i app.js)
-window.addEventListener("error", (e) => {
-  console.error("JS error:", e.error || e.message);
-  const s = document.getElementById("status");
-  if (s) s.textContent = "❌ JS error: " + (e.message || e.error);
-});
-window.addEventListener("unhandledrejection", (e) => {
-  console.error("Promise rejection:", e.reason);
-  const s = document.getElementById("status");
-  if (s) s.textContent = "❌ Promise rejection: " + (e.reason?.message || String(e.reason));
-});
-window.addEventListener("DOMContentLoaded", () => {
-  const s = document.getElementById("status");
-  if (s) s.textContent = "✅ app.js lastet (venter på handling)";
-});
-
-document.body.insertAdjacentHTML(
-  "afterbegin",
-  "<div style='padding:8px;border:2px solid red;margin:8px 0;'>APP.JS LOADED</div>"
-);
-// app.js (ES module) – fungerer direkte på GitHub Pages med <script type="module">
+// app.js (ES module) – lastes med <script type="module" src="./app.js"></script>
 
 /* =========================
    Firebase (CDN ES Modules)
@@ -34,7 +14,7 @@ import {
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
-/* ---- Din firebaseConfig (fra Firebase Console) ---- */
+/* ---- firebaseConfig ---- */
 const firebaseConfig = {
   apiKey: "AIzaSyC9fFogpchL6vJbia2s5hh60v8Xie5-kfA",
   authDomain: "padel-plan-3668b.firebaseapp.com",
@@ -49,21 +29,11 @@ const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
 
-const statusEl = document.getElementById("status");
-if (statusEl) statusEl.textContent = "🔄 Logger inn i Firebase…";
-
-const firebaseReady = signInAnonymously(auth)
-  .then(() => {
-    if (statusEl) statusEl.textContent = "✅ Firebase innlogget – klar.";
-  })
-  .catch((err) => {
-    console.error(err);
-    if (statusEl) statusEl.textContent = "❌ Firebase auth feilet: " + (err?.message || err);
-    throw err;
-  });
+// Ikke blokker resten av fila med top-level await
+const firebaseReady = signInAnonymously(auth);
 
 /* =========================
-   Helpers: session id via planId + pin
+   Session helpers (planId + pin)
    ========================= */
 const COLLECTION = "sessions";
 
@@ -74,7 +44,6 @@ async function sha256Hex(input) {
 }
 
 async function getSessionId(planId, pin) {
-  // PIN beskytter ved at doc-id blir uforutsigbar uten pin
   const hex = await sha256Hex(`${planId}|${pin}`);
   return hex.slice(0, 24);
 }
@@ -84,7 +53,7 @@ function sessionRef(sessionId) {
 }
 
 /* =========================
-   Scheduler logic (uendret)
+   Scheduler logic
    ========================= */
 function gcd(a, b) { while (b) [a, b] = [b, a % b]; return Math.abs(a); }
 function pairKey(x, y) { return x < y ? `${x}||${y}` : `${y}||${x}`; }
@@ -279,10 +248,9 @@ function buildSchedule(players, seed) {
 }
 
 /* =========================
-   App state (kommer fra Firestore)
+   UI + Firestore state
    ========================= */
 const el = (id) => document.getElementById(id);
-function setStatus(msg) { el("status").textContent = msg; }
 
 let PLAN_ID = "";
 let PIN = "";
@@ -291,7 +259,7 @@ let unsubscribe = null;
 
 let PLAYERS = [];
 let MATCHES = [];
-let WINNERS = {}; // map: {"1":"A", ...}
+let WINNERS = {};  // {"1":"A", ...}
 let SCORES = {};
 let PERFECT_MODE = false;
 
@@ -354,7 +322,6 @@ function renderSchedule() {
     body.appendChild(tr);
   });
 
-  // Sett radio fra WINNERS (Firestore)
   for (let i = 1; i <= MATCHES.length; i++) {
     const v = WINNERS[String(i)];
     if (v !== "A" && v !== "B") continue;
@@ -363,14 +330,11 @@ function renderSchedule() {
   }
 
   renderScores();
-
-  const mode = PERFECT_MODE ? "PERFEKT" : "BEST MULIG";
-  setStatus(`Plan ${PLAN_ID} • ${PLAYERS.length} spillere • ${MATCHES.length} kamper • ${mode}`);
 }
 
 function renderScores() {
   const s = el("scores");
-  const entries = Object.entries(SCORES).sort((a,b) => (b[1]-a[1]) || a[0].localeCompare(b[0]));
+  const entries = Object.entries(SCORES).sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]));
   s.innerHTML = entries.map(([p, pts]) => `<div><span class="pill">${pts}</span>${p}</div>`).join("");
 }
 
@@ -378,12 +342,10 @@ function hydrateFromFirestore(data) {
   PLAYERS = data.players || [];
   MATCHES = data.matches || [];
   WINNERS = data.winners || {};
-  SCORES  = data.scores  || {};
+  SCORES = data.scores || {};
   PERFECT_MODE = !!data.perfectMode;
 
-  // Synk tekstfelt (praktisk)
   if (PLAYERS.length) el("playersInput").value = PLAYERS.join("\n");
-
   renderSchedule();
 }
 
@@ -391,65 +353,54 @@ function hydrateFromFirestore(data) {
    Firestore operations
    ========================= */
 async function joinSession(planId, pin) {
+  await firebaseReady;
+
   PLAN_ID = planId.trim();
   PIN = pin.trim();
+  if (!PLAN_ID || !PIN) return;
 
-  if (!PLAN_ID) { setStatus("Skriv inn Plan ID."); return; }
-  if (!PIN) { setStatus("Skriv inn PIN."); return; }
+  SESSION_ID = await getSessionId(PLAN_ID, PIN);
 
-  const sid = await getSessionId(PLAN_ID, PIN);
-  SESSION_ID = sid;
-
-  // stopp gammel listener
   if (unsubscribe) unsubscribe();
-
-  setStatus(`Joiner rom… (${PLAN_ID})`);
-
-  unsubscribe = onSnapshot(sessionRef(sid), (snap) => {
+  unsubscribe = onSnapshot(sessionRef(SESSION_ID), (snap) => {
     if (!snap.exists()) {
-      // session ikke opprettet ennå
+      // Tomt rom: bare skjul oppsett
       PLAYERS = [];
       MATCHES = [];
       WINNERS = {};
       SCORES = {};
       PERFECT_MODE = false;
       renderSchedule();
-      setStatus(`Rom finnes ikke ennå. Lim inn spillere og trykk "Generer oppsett". (Plan ${PLAN_ID})`);
       return;
     }
     hydrateFromFirestore(snap.data());
-  }, (err) => {
-    console.error(err);
-    setStatus(`Feil ved live-tilkobling: ${err?.message || err}`);
   });
 }
 
 async function createOrReplaceSession(keepScore) {
-  if (!PLAN_ID || !PIN) { setStatus("Trykk Join først (Plan ID + PIN)."); return; }
+  await firebaseReady;
+
+  if (!PLAN_ID || !PIN) return;
 
   const players = parsePlayers(el("playersInput").value);
   if (players.length < 4 || players.length > 8) {
-    setStatus("Du må ha mellom 4 og 8 unike spillere.");
+    alert("Du må ha mellom 4 og 8 unike spillere.");
     return;
   }
 
-  // Lag oppsett lokalt
   const seed = (Date.now() >>> 0);
   const res = buildSchedule(players, seed);
   const matches = res.schedule;
   const perfectMode = res.perfectMode;
 
-  const sid = SESSION_ID || await getSessionId(PLAN_ID, PIN);
-  SESSION_ID = sid;
-  const ref = sessionRef(sid);
+  SESSION_ID = SESSION_ID || await getSessionId(PLAN_ID, PIN);
+  const ref = sessionRef(SESSION_ID);
 
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
 
     let existingScores = {};
-    if (keepScore && snap.exists()) {
-      existingScores = snap.data().scores || {};
-    }
+    if (keepScore && snap.exists()) existingScores = snap.data().scores || {};
 
     const scores = {};
     for (const p of players) scores[p] = Number(existingScores[p] || 0);
@@ -458,18 +409,17 @@ async function createOrReplaceSession(keepScore) {
       planId: PLAN_ID,
       players,
       matches,
-      winners: {},          // ny runde
+      winners: {},      // ny runde
       scores,
       perfectMode,
       updatedAt: serverTimestamp()
     }, { merge: true });
   });
-
-  // UI oppdateres av onSnapshot
 }
 
 async function setWinner(matchIndex, newWinner) {
-  if (!SESSION_ID) { setStatus("Join først (Plan ID + PIN)."); return; }
+  await firebaseReady;
+  if (!SESSION_ID) return;
 
   await runTransaction(db, async (tx) => {
     const ref = sessionRef(SESSION_ID);
@@ -479,7 +429,7 @@ async function setWinner(matchIndex, newWinner) {
     const data = snap.data();
     const matches = data.matches || [];
     const winners = { ...(data.winners || {}) };
-    const scores  = { ...(data.scores  || {}) };
+    const scores = { ...(data.scores || {}) };
 
     const m = matches[matchIndex - 1];
     if (!m) return;
@@ -493,7 +443,6 @@ async function setWinner(matchIndex, newWinner) {
 
     if (prevWinner === "A") addTeam(m.a, -1);
     if (prevWinner === "B") addTeam(m.b, -1);
-
     if (newWinner === "A") addTeam(m.a, +1);
     if (newWinner === "B") addTeam(m.b, +1);
 
@@ -501,17 +450,17 @@ async function setWinner(matchIndex, newWinner) {
 
     tx.update(ref, { winners, scores, updatedAt: serverTimestamp() });
   });
-
-  // UI oppdateres av onSnapshot
 }
 
 async function resetRound() {
-  if (!SESSION_ID) { setStatus("Join først (Plan ID + PIN)."); return; }
+  await firebaseReady;
+  if (!SESSION_ID) return;
   await setDoc(sessionRef(SESSION_ID), { winners: {}, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 async function resetAll() {
-  if (!SESSION_ID) { setStatus("Join først (Plan ID + PIN)."); return; }
+  await firebaseReady;
+  if (!SESSION_ID) return;
 
   await runTransaction(db, async (tx) => {
     const ref = sessionRef(SESSION_ID);
@@ -527,13 +476,13 @@ async function resetAll() {
 }
 
 /* =========================
-   Wiring (matches din index.html)
+   Wiring
    ========================= */
 function todayISO() {
   const d = new Date();
   const yyyy = d.getFullYear();
-  const mm = String(d.getMonth()+1).padStart(2,"0");
-  const dd = String(d.getDate()).padStart(2,"0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
 
@@ -544,96 +493,50 @@ document.addEventListener("change", async (e) => {
   const matchIndex = parseInt(t.name.slice(1), 10);
   if (!Number.isFinite(matchIndex)) return;
 
-  const newWinner = t.value; // A/B
+  const newWinner = t.value;
   if (newWinner !== "A" && newWinner !== "B") return;
 
   try {
     await setWinner(matchIndex, newWinner);
   } catch (err) {
     console.error(err);
-    setStatus(`Kunne ikke oppdatere vinner: ${err?.message || err}`);
   }
 });
 
 window.addEventListener("load", () => {
-  // Default planId = i dag
   el("planId").value = todayISO();
 
-  // Join
   el("joinBtn").addEventListener("click", async () => {
     const pid = el("planId").value.trim() || todayISO();
     el("planId").value = pid;
-
     const pin = (el("pin")?.value || "").trim();
     await joinSession(pid, pin);
   });
 
-  // Generer oppsett (skriver til Firestore)
+  el("generateBtn").addEventListener("click", async () => {
+    const pid = el("planId").value.trim() || todayISO();
+    el("planId").value = pid;
 
+    const pin = (el("pin")?.value || "").trim();
+    if (!pin) { alert("Skriv inn PIN."); return; }
 
-  
-// Generer oppsett (skriver til Firestore)
-el("generateBtn").addEventListener("click", async () => {
-  // DEBUG: skriv et synlig dokument (så vi vet at writes fungerer)
-  try {
-    setStatus("DEBUG: prøver å skrive til Firestore…");
-    await setDoc(sessionRef("debug_from_app"), { ping: Date.now(), from: "generateBtn" }, { merge: true });
-    setStatus("✅ DEBUG: skrev debug_from_app i Firestore. Genererer oppsett…");
-  } catch (err) {
-    console.error(err);
-    setStatus("❌ DEBUG write feilet: " + (err?.message || err));
-    return;
-  }
+    if (!SESSION_ID || PLAN_ID !== pid || PIN !== pin) {
+      await joinSession(pid, pin);
+    }
 
-  const pid = el("planId").value.trim() || todayISO();
-  el("planId").value = pid;
+    const keep = el("keepScore").checked;
+    try {
+      await createOrReplaceSession(keep);
+    } catch (err) {
+      console.error(err);
+    }
+  });
 
-  const pin = (el("pin")?.value || "").trim();
-  if (!pin) { setStatus("Skriv inn PIN før du genererer."); return; }
-
-  // Sørg for at vi har en live listener (join) før vi skriver
-  if (!SESSION_ID || PLAN_ID !== pid || PIN !== pin) {
-    await joinSession(pid, pin);
-  }
-
-  const keep = el("keepScore").checked;
-  try {
-    await createOrReplaceSession(keep);
-  } catch (err) {
-    console.error(err);
-    setStatus("Kunne ikke generere oppsett: " + (err?.message || err));
-  }
-});
-
-  // Ny runde (nullstill kampvalg)
   el("newRoundBtn").addEventListener("click", async () => {
-    try {
-      await resetRound();
-      setStatus(`Ny runde startet (poeng beholdt) • Plan ${PLAN_ID}`);
-    } catch (err) {
-      console.error(err);
-      setStatus(`Kunne ikke starte ny runde: ${err?.message || err}`);
-    }
+    try { await resetRound(); } catch (err) { console.error(err); }
   });
 
-  // Nullstill alt
   el("resetAllBtn").addEventListener("click", async () => {
-    try {
-      await resetAll();
-      setStatus(`Nullstilt kampvalg og poeng • Plan ${PLAN_ID}`);
-    } catch (err) {
-      console.error(err);
-      setStatus(`Kunne ikke nullstille alt: ${err?.message || err}`);
-    }
+    try { await resetAll(); } catch (err) { console.error(err); }
   });
-
-  setStatus("Skriv Plan ID + PIN og trykk Join. Deretter kan du generere oppsett.");
 });
-
-
-
-
-
-
-
-
