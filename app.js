@@ -1,3 +1,19 @@
+// BOOT + FEILVISNING (øverst i app.js)
+window.addEventListener("error", (e) => {
+  console.error("JS error:", e.error || e.message);
+  const s = document.getElementById("status");
+  if (s) s.textContent = "❌ JS error: " + (e.message || e.error);
+});
+window.addEventListener("unhandledrejection", (e) => {
+  console.error("Promise rejection:", e.reason);
+  const s = document.getElementById("status");
+  if (s) s.textContent = "❌ Promise rejection: " + (e.reason?.message || String(e.reason));
+});
+window.addEventListener("DOMContentLoaded", () => {
+  const s = document.getElementById("status");
+  if (s) s.textContent = "✅ app.js lastet (venter på handling)";
+});
+
 document.body.insertAdjacentHTML(
   "afterbegin",
   "<div style='padding:8px;border:2px solid red;margin:8px 0;'>APP.JS LOADED</div>"
@@ -602,6 +618,7 @@ el("generateBtn").addEventListener("click", async () => {
 
   setStatus("Skriv Plan ID + PIN og trykk Join. Deretter kan du generere oppsett.");
 });
+
 
 
 
