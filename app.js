@@ -49,7 +49,18 @@ const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
 
-await signInAnonymously(auth);
+const statusEl = document.getElementById("status");
+if (statusEl) statusEl.textContent = "🔄 Logger inn i Firebase…";
+
+const firebaseReady = signInAnonymously(auth)
+  .then(() => {
+    if (statusEl) statusEl.textContent = "✅ Firebase innlogget – klar.";
+  })
+  .catch((err) => {
+    console.error(err);
+    if (statusEl) statusEl.textContent = "❌ Firebase auth feilet: " + (err?.message || err);
+    throw err;
+  });
 
 /* =========================
    Helpers: session id via planId + pin
@@ -618,6 +629,7 @@ el("generateBtn").addEventListener("click", async () => {
 
   setStatus("Skriv Plan ID + PIN og trykk Join. Deretter kan du generere oppsett.");
 });
+
 
 
 
