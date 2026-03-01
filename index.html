@@ -12,36 +12,31 @@
 
     .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
     label { font-size: 12px; color: #444; display:block; margin-bottom: 4px; }
-
-    input[type="text"], input[type="password"] {
-      padding: 8px 10px; border: 1px solid #ddd; border-radius: 10px; font-size: 14px;
-    }
-
-    textarea { width: 320px; max-width: 100%; height: 150px; padding: 10px; border: 1px solid #ddd; border-radius: 10px; font-size: 14px; }
+    input[type="text"], input[type="password"] { padding: 8px 10px; border: 1px solid #ddd; border-radius: 10px; font-size: 14px; }
+    textarea { width: 360px; max-width: 100%; height: 160px; padding: 10px; border: 1px solid #ddd; border-radius: 10px; font-size: 14px; }
     .muted { color: #666; font-size: 12px; line-height: 1.35; }
 
     .btn {
-      display:inline-block; padding: 9px 12px; border:1px solid #ddd; border-radius:12px;
+      display:inline-block; padding: 10px 14px; border:1px solid #ddd; border-radius:12px;
       background:#fff; cursor:pointer; font-size:14px;
     }
     .btn:active { transform: translateY(1px); }
     .btn.primary { border-color: #111; background:#111; color:#fff; }
+    .btn.big { padding: 14px 18px; font-size: 16px; border-radius: 14px; }
 
     table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 10px; }
     th, td { padding: 8px 6px; border-bottom: 1px solid #eee; vertical-align: top; }
     th { text-align: left; font-size: 13px; }
     td { font-size: 14px; }
 
-    /* Kolonnebredder (overstyres på mobil via media) */
     .col-kamp { width: 10%; }
     .col-lag  { width: 32%; }
     .col-win  { width: 26%; }
 
     .c-lag { overflow: hidden; text-overflow: ellipsis; }
 
-    /* Vinner-knapper (store, jevne) */
     .winnercell { white-space: nowrap; }
-    .winseg { display:flex; gap: 10px; align-items: stretch; justify-content: space-between; max-width: 220px; }
+    .winseg { display:flex; gap: 10px; align-items: stretch; justify-content: space-between; max-width: 240px; }
     .winradio { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
     .winbtn {
       flex: 1; text-align:center; padding: 10px 0;
@@ -55,22 +50,24 @@
     .scoregrid { display:grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin-top: 10px; }
     .pill { display:inline-block; padding: 2px 7px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; margin-right: 8px; }
 
+    .view { display: none; }
+    .view.active { display: block; }
+
     @media (max-width: 520px) {
       body { margin: 8px; }
       .card { padding: 10px; border-radius: 10px; }
-      textarea { width: 100%; height: 130px; }
+      textarea { width: 100%; height: 140px; }
 
       th, td { padding: 6px 4px; }
       th { font-size: 12px; }
       td { font-size: 13px; }
 
-      /* Gi mer plass til vinner på mobil */
       .col-kamp { width: 12%; }
       .col-lag  { width: 28%; }
       .col-win  { width: 32%; }
 
       .c-lag { font-size: 12.5px; }
-      .winseg { max-width: 260px; gap: 12px; }
+      .winseg { max-width: 280px; gap: 12px; }
       .winbtn { padding: 12px 0; font-size: 22px; }
 
       .scoregrid { grid-template-columns: 1fr; }
@@ -80,46 +77,95 @@
 
 <body>
   <div class="card">
-    <h1>Padelplan (JS)</h1>
+    <!-- HOME -->
+    <div id="viewHome" class="view active">
+      <h1>Padelplan</h1>
+      <div class="muted" style="margin-bottom:12px;">Velg om du vil opprette en ny session, eller joine en eksisterende.</div>
 
-    <div class="row">
-      <div>
-        <label for="planId">Plan ID (f.eks. dato)</label>
-        <input id="planId" type="text" placeholder="2026-03-01" />
-        <div class="muted">Bruk samme Plan ID for å være i samme “rom”.</div>
+      <div class="row">
+        <button class="btn big primary" id="goCreateBtn">Create</button>
+        <button class="btn big" id="goJoinBtn">Join</button>
       </div>
+    </div>
 
-      <div>
-        <label for="pin">PIN (deles med gruppa)</label>
-        <input id="pin" type="password" inputmode="numeric" placeholder="4821" />
-        <div class="muted">Alle må bruke samme PIN for å se/endre samme score.</div>
-      </div>
+    <!-- CREATE -->
+    <div id="viewCreate" class="view">
+      <h1>Create session</h1>
 
-      <div>
-        <label for="keepScore">Ved nytt oppsett</label>
-        <div style="display:flex; gap:10px; align-items:center;">
-          <input id="keepScore" type="checkbox" checked />
-          <span class="muted">Behold poeng</span>
+      <div class="row">
+        <div>
+          <label for="createSessionId">Session ID</label>
+          <input id="createSessionId" type="text" placeholder="mandag-18" />
+          <div class="muted">Del denne med gruppa.</div>
+        </div>
+
+        <div>
+          <label for="createPin">PIN</label>
+          <input id="createPin" type="password" inputmode="numeric" placeholder="4821" />
+          <div class="muted">Alle må bruke samme PIN.</div>
+        </div>
+
+        <div>
+          <label for="createKeepScore">Ved nytt oppsett</label>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <input id="createKeepScore" type="checkbox" checked />
+            <span class="muted">Behold poeng</span>
+          </div>
         </div>
       </div>
 
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button class="btn" id="joinBtn">Join</button>
-        <button class="btn primary" id="generateBtn">Generer oppsett</button>
-        <button class="btn" id="newRoundBtn">Nullstill kampvalg (ny runde)</button>
-        <button class="btn" id="resetAllBtn">Nullstill alt</button>
+      <div style="margin-top:12px;">
+        <label for="createPlayers">Spillere (én per linje)</label>
+        <textarea id="createPlayers" placeholder="Markus&#10;Partap&#10;..."></textarea>
+      </div>
+
+      <div class="row" style="margin-top:12px;">
+        <button class="btn" id="createBackBtn">Tilbake</button>
+        <button class="btn primary" id="createStartBtn">Opprett og start</button>
       </div>
     </div>
 
-    <div style="margin-top:12px;">
-      <label for="playersInput">Spillere (én per linje)</label>
-      <textarea id="playersInput" placeholder="Markus&#10;Partap&#10;..."></textarea>
-      <div class="muted" id="status"></div>
+    <!-- JOIN -->
+    <div id="viewJoin" class="view">
+      <h1>Join session</h1>
+
+      <div class="row">
+        <div>
+          <label for="joinSessionId">Session ID</label>
+          <input id="joinSessionId" type="text" placeholder="mandag-18" />
+        </div>
+        <div>
+          <label for="joinPin">PIN</label>
+          <input id="joinPin" type="password" inputmode="numeric" placeholder="4821" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px;">
+        <button class="btn" id="joinBackBtn">Tilbake</button>
+        <button class="btn primary" id="joinStartBtn">Join</button>
+      </div>
+
+      <div class="muted" style="margin-top:10px;">
+        Hvis du får blank side: sjekk at noen har trykket “Opprett og start” på Create først.
+      </div>
     </div>
 
-    <div id="scheduleWrap" style="display:none;">
-      <h2>Oppsett</h2>
+    <!-- MATCH -->
+    <div id="viewMatch" class="view">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <div>
+          <h1 style="margin-bottom:4px;">Match</h1>
+          <div class="muted" id="matchInfo"></div>
+        </div>
+        <button class="btn" id="leaveBtn">Leave</button>
+      </div>
 
+      <div class="row" style="margin-top:8px;">
+        <button class="btn" id="newRoundBtn">Ny runde</button>
+        <button class="btn" id="resetAllBtn">Nullstill alt</button>
+      </div>
+
+      <h2>Oppsett</h2>
       <table>
         <colgroup>
           <col class="col-kamp" />
@@ -138,16 +184,11 @@
         <tbody id="scheduleBody"></tbody>
       </table>
 
-      <h2>Poeng (akkumulert)</h2>
+      <h2>Poeng</h2>
       <div id="scores" class="scoregrid"></div>
-    </div>
-
-    <div class="muted" style="margin-top:10px;">
-      Live score: Alle som bruker samme Plan ID + PIN vil se oppdateringer i sanntid.
     </div>
   </div>
 
-  <script type="module" src="./app.js?v=3"></script>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
-
