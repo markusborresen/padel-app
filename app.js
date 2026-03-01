@@ -1,3 +1,7 @@
+document.body.insertAdjacentHTML(
+  "afterbegin",
+  "<div style='padding:8px;border:2px solid red;margin:8px 0;'>APP.JS LOADED</div>"
+);
 // app.js (ES module) – fungerer direkte på GitHub Pages med <script type="module">
 
 /* =========================
@@ -583,5 +587,6 @@ window.addEventListener("load", () => {
 
   setStatus("Skriv Plan ID + PIN og trykk Join. Deretter kan du generere oppsett.");
 });
+
 
 
