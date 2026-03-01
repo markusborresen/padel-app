@@ -1,0 +1,141 @@
+ <!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Padelplan</title>
+  <style>
+    body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial; margin: 12px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 12px; max-width: 980px; }
+    h1 { font-size: 18px; margin: 0 0 10px 0; }
+    h2 { font-size: 16px; margin: 14px 0 6px 0; }
+
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+    label { font-size: 12px; color: #444; display:block; margin-bottom: 4px; }
+    input[type="text"] { padding: 8px 10px; border: 1px solid #ddd; border-radius: 10px; font-size: 14px; }
+    textarea { width: 320px; max-width: 100%; height: 150px; padding: 10px; border: 1px solid #ddd; border-radius: 10px; font-size: 14px; }
+    .muted { color: #666; font-size: 12px; line-height: 1.35; }
+
+    .btn {
+      display:inline-block; padding: 9px 12px; border:1px solid #ddd; border-radius:12px;
+      background:#fff; cursor:pointer; font-size:14px;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { border-color: #111; background:#111; color:#fff; }
+
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 10px; }
+    th, td { padding: 8px 6px; border-bottom: 1px solid #eee; vertical-align: top; }
+    th { text-align: left; font-size: 13px; }
+    td { font-size: 14px; }
+
+    /* Kolonnebredder (overstyres på mobil via media) */
+    .col-kamp { width: 10%; }
+    .col-lag  { width: 32%; }
+    .col-win  { width: 26%; }
+
+    .c-lag { overflow: hidden; text-overflow: ellipsis; }
+
+    /* Vinner-knapper (store, jevne) */
+    .winnercell { white-space: nowrap; }
+    .winseg { display:flex; gap: 10px; align-items: stretch; justify-content: space-between; max-width: 220px; }
+    .winradio { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
+    .winbtn {
+      flex: 1; text-align:center; padding: 10px 0;
+      border:1px solid #ddd; border-radius: 14px;
+      font-weight: 800; user-select: none; -webkit-tap-highlight-color: transparent;
+      font-size: 18px;
+    }
+    .winradio:checked + .winbtn { background:#111; color:#fff; border-color:#111; }
+    .winbtn:active { transform: translateY(1px); }
+
+    .scoregrid { display:grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin-top: 10px; }
+    .pill { display:inline-block; padding: 2px 7px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; margin-right: 8px; }
+
+    @media (max-width: 520px) {
+      body { margin: 8px; }
+      .card { padding: 10px; border-radius: 10px; }
+      textarea { width: 100%; height: 130px; }
+
+      th, td { padding: 6px 4px; }
+      th { font-size: 12px; }
+      td { font-size: 13px; }
+
+      /* Gi mer plass til vinner på mobil */
+      .col-kamp { width: 12%; }
+      .col-lag  { width: 28%; }
+      .col-win  { width: 32%; }
+
+      .c-lag { font-size: 12.5px; }
+      .winseg { max-width: 260px; gap: 12px; }
+      .winbtn { padding: 12px 0; font-size: 22px; }
+
+      .scoregrid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Padelplan (JS)</h1>
+
+    <div class="row">
+      <div>
+        <label for="planId">Plan ID (f.eks. dato)</label>
+        <input id="planId" type="text" placeholder="2026-03-01" />
+        <div class="muted">All lagring skjer per Plan ID på denne enheten.</div>
+      </div>
+
+      <div>
+        <label for="keepScore">Ved nytt oppsett</label>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <input id="keepScore" type="checkbox" checked />
+          <span class="muted">Behold poeng</span>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn" id="loadPlanBtn">Last plan</button>
+        <button class="btn primary" id="generateBtn">Generer oppsett</button>
+        <button class="btn" id="newRoundBtn">Nullstill kampvalg (ny runde)</button>
+        <button class="btn" id="resetAllBtn">Nullstill alt</button>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <label for="playersInput">Spillere (én per linje)</label>
+      <textarea id="playersInput" placeholder="Markus&#10;Eline&#10;..."></textarea>
+      <div class="muted" id="status"></div>
+    </div>
+
+    <div id="scheduleWrap" style="display:none;">
+      <h2>Oppsett</h2>
+
+      <table>
+        <colgroup>
+          <col class="col-kamp" />
+          <col class="col-lag" />
+          <col class="col-lag" />
+          <col class="col-win" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Kamp</th>
+            <th>Lag A</th>
+            <th>Lag B</th>
+            <th>Vinner</th>
+          </tr>
+        </thead>
+        <tbody id="scheduleBody"></tbody>
+      </table>
+
+      <h2>Poeng (akkumulert)</h2>
+      <div id="scores" class="scoregrid"></div>
+    </div>
+
+    <div class="muted" style="margin-top:10px;">
+      NB: Dette synker ikke mellom telefoner. Det ligger i nettleserens localStorage.
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
