@@ -1,17 +1,7 @@
-// app.js (ES module) – lastes med <script type="module" src="./app.js"></script>
-
-/* =========================
-   Firebase (CDN ES Modules)
-   ========================= */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
 import {
-  getFirestore,
-  doc,
-  setDoc,
-  onSnapshot,
-  runTransaction,
-  serverTimestamp
+  getFirestore, doc, setDoc, onSnapshot, runTransaction, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
 /* ---- firebaseConfig ---- */
@@ -28,33 +18,25 @@ const firebaseConfig = {
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
-
-// Ikke blokker resten av fila med top-level await
 const firebaseReady = signInAnonymously(auth);
 
-/* =========================
-   Session helpers (planId + pin)
-   ========================= */
 const COLLECTION = "sessions";
 
+/* ===== Session id: sha256(sessionId|pin) ===== */
 async function sha256Hex(input) {
   const data = new TextEncoder().encode(input);
   const hash = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
-
-async function getSessionId(planId, pin) {
-  const hex = await sha256Hex(`${planId}|${pin}`);
+async function getDocId(sessionId, pin) {
+  const hex = await sha256Hex(`${sessionId}|${pin}`);
   return hex.slice(0, 24);
 }
-
-function sessionRef(sessionId) {
-  return doc(db, COLLECTION, sessionId);
+function sessionRef(docId) {
+  return doc(db, COLLECTION, docId);
 }
 
-/* =========================
-   Scheduler logic
-   ========================= */
+/* ===== Scheduler (samme som før) ===== */
 function gcd(a, b) { while (b) [a, b] = [b, a % b]; return Math.abs(a); }
 function pairKey(x, y) { return x < y ? `${x}||${y}` : `${y}||${x}`; }
 
@@ -70,7 +52,6 @@ function mulberry32(seed) {
 function randInt(rng, n) { return Math.floor(rng() * n); }
 
 function perfectPossible(n) { return (n * (n - 1)) % 4 === 0; }
-
 function chooseMatchCount(n) {
   if (perfectPossible(n)) return { M: (n * (n - 1)) / 4, perfectMode: true };
   const minForTeammates = Math.ceil(((n * (n - 1)) / 2) / 2);
@@ -79,7 +60,6 @@ function chooseMatchCount(n) {
   if (M % base !== 0) M += (base - (M % base));
   return { M, perfectMode: false };
 }
-
 function combinations4(arr) {
   const out = [];
   for (let i = 0; i < arr.length; i++)
@@ -89,15 +69,12 @@ function combinations4(arr) {
           out.push([arr[i], arr[j], arr[k], arr[l]]);
   return out;
 }
-
 function normalizeTeam(a, b) { return a < b ? [a, b] : [b, a]; }
-
 function matchKey(m) {
   const ta = m.a.join("|");
   const tb = m.b.join("|");
   return ta < tb ? `${ta}__${tb}` : `${tb}__${ta}`;
 }
-
 function partitionsOfFour(p4) {
   const [p0, p1, p2, p3] = p4;
   const pairs = [
@@ -111,170 +88,124 @@ function partitionsOfFour(p4) {
     const b = normalizeTeam(t2[0], t2[1]);
     const ta = a.join("|");
     const tb = b.join("|");
-    const m = ta < tb ? { a, b } : { a: b, b: a };
-    matches.push(m);
+    matches.push(ta < tb ? { a, b } : { a: b, b: a });
   }
   const seen = new Set();
   return matches.filter(m => (seen.has(matchKey(m)) ? false : seen.add(matchKey(m))));
 }
-
 function generateCandidateMatches(players) {
   const uniq = new Map();
-  for (const p4 of combinations4(players)) {
-    for (const m of partitionsOfFour(p4)) uniq.set(matchKey(m), m);
-  }
+  for (const p4 of combinations4(players)) for (const m of partitionsOfFour(p4)) uniq.set(matchKey(m), m);
   return Array.from(uniq.values());
 }
-
-const W = {
-  PLAY_BALANCE: 10.0,
-  TEAMMATE_MISSING: 25.0,
-  TEAMMATE_REPEAT: 6.0,
-  OPP_REPEAT: 2.0,
-  CONSEC_REST: 1.2,
-  PERFECT_DEVIATION: 40.0,
-};
-
+const W = { PLAY_BALANCE:10, TEAMMATE_MISSING:25, TEAMMATE_REPEAT:6, OPP_REPEAT:2, CONSEC_REST:1.2, PERFECT_DEVIATION:40 };
 function scoreSchedule(schedule, players, perfectMode) {
   const n = players.length;
   const plays = new Map(players.map(p => [p, 0]));
   const teammateCounts = new Map();
   const oppCounts = new Map();
-
   const restStreak = new Map(players.map(p => [p, 0]));
   let restStreakPen = 0;
 
   for (const m of schedule) {
     const inMatch = new Set([m.a[0], m.a[1], m.b[0], m.b[1]]);
-
     for (const p of players) {
-      if (inMatch.has(p)) {
-        plays.set(p, plays.get(p) + 1);
-        restStreak.set(p, 0);
-      } else {
-        const s = restStreak.get(p) + 1;
-        restStreak.set(p, s);
-        if (s >= 2) restStreakPen += (s - 1);
-      }
+      if (inMatch.has(p)) { plays.set(p, plays.get(p)+1); restStreak.set(p,0); }
+      else { const s = restStreak.get(p)+1; restStreak.set(p,s); if (s>=2) restStreakPen += (s-1); }
     }
-
     const tk1 = pairKey(m.a[0], m.a[1]);
     const tk2 = pairKey(m.b[0], m.b[1]);
-    teammateCounts.set(tk1, (teammateCounts.get(tk1) || 0) + 1);
-    teammateCounts.set(tk2, (teammateCounts.get(tk2) || 0) + 1);
-
+    teammateCounts.set(tk1, (teammateCounts.get(tk1)||0)+1);
+    teammateCounts.set(tk2, (teammateCounts.get(tk2)||0)+1);
     for (const x of m.a) for (const y of m.b) {
-      const ok = pairKey(x, y);
-      oppCounts.set(ok, (oppCounts.get(ok) || 0) + 1);
+      const ok = pairKey(x,y);
+      oppCounts.set(ok, (oppCounts.get(ok)||0)+1);
     }
   }
 
   const vals = players.map(p => plays.get(p));
-  const mean = vals.reduce((a, b) => a + b, 0) / n;
-  const varPlay = vals.reduce((acc, v) => acc + (v - mean) ** 2, 0) / n;
+  const mean = vals.reduce((a,b)=>a+b,0)/n;
+  const varPlay = vals.reduce((acc,v)=>acc+(v-mean)**2,0)/n;
 
-  let missing = 0, deviation = 0, repeats = 0;
-  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+  let missing=0, deviation=0, repeats=0;
+  for (let i=0;i<n;i++) for (let j=i+1;j<n;j++) {
     const pk = pairKey(players[i], players[j]);
-    const c = teammateCounts.get(pk) || 0;
-    if (c === 0) missing += 1;
-    repeats += Math.max(0, c - 1);
-    if (perfectMode) deviation += Math.abs(c - 1);
+    const c = teammateCounts.get(pk)||0;
+    if (c===0) missing++;
+    repeats += Math.max(0,c-1);
+    if (perfectMode) deviation += Math.abs(c-1);
   }
 
-  let oppRepeats = 0;
-  for (const c of oppCounts.values()) oppRepeats += Math.max(0, c - 1);
+  let oppRepeats=0;
+  for (const c of oppCounts.values()) oppRepeats += Math.max(0,c-1);
 
   let total =
-    W.PLAY_BALANCE * varPlay +
-    W.TEAMMATE_MISSING * (missing ** 2) +
-    W.TEAMMATE_REPEAT * repeats +
-    W.OPP_REPEAT * oppRepeats +
-    W.CONSEC_REST * restStreakPen;
+    W.PLAY_BALANCE*varPlay +
+    W.TEAMMATE_MISSING*(missing**2) +
+    W.TEAMMATE_REPEAT*repeats +
+    W.OPP_REPEAT*oppRepeats +
+    W.CONSEC_REST*restStreakPen;
 
-  if (perfectMode) total += W.PERFECT_DEVIATION * deviation;
+  if (perfectMode) total += W.PERFECT_DEVIATION*deviation;
   return total;
 }
-
 function randomSchedule(candidates, M, rng) {
-  const sched = [];
-  for (let i = 0; i < M; i++) sched.push(candidates[randInt(rng, candidates.length)]);
-  return sched;
+  const sched=[]; for (let i=0;i<M;i++) sched.push(candidates[randInt(rng,candidates.length)]); return sched;
 }
-
 function improveSchedule(init, candidates, players, perfectMode, rng, deadlineMs) {
-  let best = init.slice();
-  let bestScore = scoreSchedule(best, players, perfectMode);
-  const LOCAL_STEPS = 1400;
-
-  for (let step = 0; step < LOCAL_STEPS; step++) {
-    if (performance.now() > deadlineMs) break;
-    const next = best.slice();
-    const i = randInt(rng, next.length);
-    next[i] = candidates[randInt(rng, candidates.length)];
-    const s = scoreSchedule(next, players, perfectMode);
-    if (s < bestScore) {
-      best = next;
-      bestScore = s;
-    }
+  let best=init.slice();
+  let bestScore=scoreSchedule(best, players, perfectMode);
+  const LOCAL_STEPS=1400;
+  for (let step=0;step<LOCAL_STEPS;step++) {
+    if (performance.now()>deadlineMs) break;
+    const next=best.slice();
+    next[randInt(rng,next.length)] = candidates[randInt(rng,candidates.length)];
+    const s=scoreSchedule(next, players, perfectMode);
+    if (s<bestScore) { best=next; bestScore=s; }
   }
-  return { best, bestScore };
+  return best;
 }
-
 function buildSchedule(players, seed) {
   const { M, perfectMode } = chooseMatchCount(players.length);
   const rng = mulberry32(seed);
-
   const candidates = generateCandidateMatches(players);
-
-  let best = null;
-  let bestScore = Infinity;
-
-  const MAX_MS = 700;
-  const deadline = performance.now() + MAX_MS;
-  const RESTARTS = 120;
-
-  for (let r = 0; r < RESTARTS; r++) {
-    if (performance.now() > deadline) break;
+  let best=null, bestScore=Infinity;
+  const deadline = performance.now() + 700;
+  for (let r=0;r<120;r++) {
+    if (performance.now()>deadline) break;
     const init = randomSchedule(candidates, M, rng);
-    const out = improveSchedule(init, candidates, players, perfectMode, rng, deadline);
-    if (out.bestScore < bestScore) {
-      best = out.best;
-      bestScore = out.bestScore;
-    }
+    const improved = improveSchedule(init, candidates, players, perfectMode, rng, deadline);
+    const s = scoreSchedule(improved, players, perfectMode);
+    if (s<bestScore) { best=improved; bestScore=s; }
   }
-
-  return { schedule: best, M, perfectMode, seed };
+  return { schedule: best, perfectMode };
 }
 
-/* =========================
-   UI + Firestore state
-   ========================= */
+/* ===== State ===== */
 const el = (id) => document.getElementById(id);
+function showView(name) {
+  for (const id of ["viewHome","viewCreate","viewJoin","viewMatch"]) {
+    el(id).classList.toggle("active", id === name);
+  }
+}
 
-let PLAN_ID = "";
-let PIN = "";
-let SESSION_ID = null;
+let CURRENT_SESSION_ID = "";
+let CURRENT_PIN = "";
+let CURRENT_DOC_ID = null;
 let unsubscribe = null;
 
 let PLAYERS = [];
 let MATCHES = [];
-let WINNERS = {};  // {"1":"A", ...}
+let WINNERS = {};
 let SCORES = {};
-let PERFECT_MODE = false;
 
 function initEmptyScores(players) {
   const o = {};
   for (const p of players) o[p] = 0;
   return o;
 }
-
 function parsePlayers(text) {
-  const raw = text
-    .split(/\r?\n|,/g)
-    .map(s => s.trim())
-    .filter(Boolean);
-
+  const raw = text.split(/\r?\n|,/g).map(s=>s.trim()).filter(Boolean);
   const seen = new Set();
   const out = [];
   for (const name of raw) {
@@ -286,25 +217,19 @@ function parsePlayers(text) {
   return out;
 }
 
-/* =========================
-   Rendering
-   ========================= */
+/* ===== Rendering ===== */
+function renderMatchInfo() {
+  el("matchInfo").textContent = CURRENT_SESSION_ID ? `Session: ${CURRENT_SESSION_ID}` : "";
+}
 function renderSchedule() {
-  const wrap = el("scheduleWrap");
   const body = el("scheduleBody");
   body.innerHTML = "";
-
-  if (!MATCHES.length) {
-    wrap.style.display = "none";
-    return;
-  }
-  wrap.style.display = "block";
+  if (!MATCHES.length) return;
 
   MATCHES.forEach((m, idx) => {
     const i = idx + 1;
     const ida = `w${i}A`;
     const idb = `w${i}B`;
-
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td class="c-kamp">${i}</td>
@@ -328,73 +253,60 @@ function renderSchedule() {
     const inp = document.querySelector(`input[name="w${i}"][value="${v}"]`);
     if (inp) inp.checked = true;
   }
-
-  renderScores();
 }
-
 function renderScores() {
   const s = el("scores");
-  const entries = Object.entries(SCORES).sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]));
+  const entries = Object.entries(SCORES).sort((a,b)=>(b[1]-a[1])||a[0].localeCompare(b[0]));
   s.innerHTML = entries.map(([p, pts]) => `<div><span class="pill">${pts}</span>${p}</div>`).join("");
 }
-
-function hydrateFromFirestore(data) {
+function hydrate(data) {
   PLAYERS = data.players || [];
   MATCHES = data.matches || [];
   WINNERS = data.winners || {};
-  SCORES = data.scores || {};
-  PERFECT_MODE = !!data.perfectMode;
-
-  if (PLAYERS.length) el("playersInput").value = PLAYERS.join("\n");
+  SCORES  = data.scores  || {};
+  renderMatchInfo();
   renderSchedule();
+  renderScores();
 }
 
-/* =========================
-   Firestore operations
-   ========================= */
-async function joinSession(planId, pin) {
+/* ===== Firestore ops ===== */
+async function join(sessionId, pin, { alertIfMissing = true } = {}) {
   await firebaseReady;
+  CURRENT_SESSION_ID = sessionId.trim();
+  CURRENT_PIN = pin.trim();
+  if (!CURRENT_SESSION_ID || !CURRENT_PIN) return false;
 
-  PLAN_ID = planId.trim();
-  PIN = pin.trim();
-  if (!PLAN_ID || !PIN) return;
-
-  SESSION_ID = await getSessionId(PLAN_ID, PIN);
+  CURRENT_DOC_ID = await getDocId(CURRENT_SESSION_ID, CURRENT_PIN);
 
   if (unsubscribe) unsubscribe();
-  unsubscribe = onSnapshot(sessionRef(SESSION_ID), (snap) => {
+  unsubscribe = onSnapshot(sessionRef(CURRENT_DOC_ID), (snap) => {
     if (!snap.exists()) {
-      // Tomt rom: bare skjul oppsett
-      PLAYERS = [];
-      MATCHES = [];
-      WINNERS = {};
-      SCORES = {};
-      PERFECT_MODE = false;
-      renderSchedule();
+      if (alertIfMissing) alert("Fant ingen session. Be noen trykke Create først.");
       return;
     }
-    hydrateFromFirestore(snap.data());
+    hydrate(snap.data());
+    showView("viewMatch");
   });
+
+  return true;
 }
 
-async function createOrReplaceSession(keepScore) {
+async function createSession(sessionId, pin, playersText, keepScore) {
   await firebaseReady;
 
-  if (!PLAN_ID || !PIN) return;
-
-  const players = parsePlayers(el("playersInput").value);
+  const players = parsePlayers(playersText);
   if (players.length < 4 || players.length > 8) {
     alert("Du må ha mellom 4 og 8 unike spillere.");
     return;
   }
 
+  await join(sessionId, pin, { alertIfMissing: false });
+
   const seed = (Date.now() >>> 0);
   const res = buildSchedule(players, seed);
   const matches = res.schedule;
-  const perfectMode = res.perfectMode;
 
-  SESSION_ID = SESSION_ID || await getSessionId(PLAN_ID, PIN);
-  const ref = sessionRef(SESSION_ID);
+  const ref = sessionRef(CURRENT_DOC_ID);
 
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
@@ -406,12 +318,11 @@ async function createOrReplaceSession(keepScore) {
     for (const p of players) scores[p] = Number(existingScores[p] || 0);
 
     tx.set(ref, {
-      planId: PLAN_ID,
+      sessionId: CURRENT_SESSION_ID,
       players,
       matches,
-      winners: {},      // ny runde
+      winners: {},
       scores,
-      perfectMode,
       updatedAt: serverTimestamp()
     }, { merge: true });
   });
@@ -419,17 +330,17 @@ async function createOrReplaceSession(keepScore) {
 
 async function setWinner(matchIndex, newWinner) {
   await firebaseReady;
-  if (!SESSION_ID) return;
+  if (!CURRENT_DOC_ID) return;
 
   await runTransaction(db, async (tx) => {
-    const ref = sessionRef(SESSION_ID);
+    const ref = sessionRef(CURRENT_DOC_ID);
     const snap = await tx.get(ref);
     if (!snap.exists()) return;
 
     const data = snap.data();
     const matches = data.matches || [];
     const winners = { ...(data.winners || {}) };
-    const scores = { ...(data.scores || {}) };
+    const scores  = { ...(data.scores  || {}) };
 
     const m = matches[matchIndex - 1];
     if (!m) return;
@@ -454,16 +365,16 @@ async function setWinner(matchIndex, newWinner) {
 
 async function resetRound() {
   await firebaseReady;
-  if (!SESSION_ID) return;
-  await setDoc(sessionRef(SESSION_ID), { winners: {}, updatedAt: serverTimestamp() }, { merge: true });
+  if (!CURRENT_DOC_ID) return;
+  await setDoc(sessionRef(CURRENT_DOC_ID), { winners: {}, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 async function resetAll() {
   await firebaseReady;
-  if (!SESSION_ID) return;
+  if (!CURRENT_DOC_ID) return;
 
   await runTransaction(db, async (tx) => {
-    const ref = sessionRef(SESSION_ID);
+    const ref = sessionRef(CURRENT_DOC_ID);
     const snap = await tx.get(ref);
     if (!snap.exists()) return;
 
@@ -475,17 +386,27 @@ async function resetAll() {
   });
 }
 
-/* =========================
-   Wiring
-   ========================= */
-function todayISO() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+function leave() {
+  if (unsubscribe) unsubscribe();
+  unsubscribe = null;
+
+  CURRENT_SESSION_ID = "";
+  CURRENT_PIN = "";
+  CURRENT_DOC_ID = null;
+
+  PLAYERS = [];
+  MATCHES = [];
+  WINNERS = {};
+  SCORES = {};
+
+  el("scheduleBody").innerHTML = "";
+  el("scores").innerHTML = "";
+  el("matchInfo").textContent = "";
+
+  showView("viewHome");
 }
 
+/* ===== Wiring ===== */
 document.addEventListener("change", async (e) => {
   const t = e.target;
   if (!t || !t.name || !t.name.startsWith("w")) return;
@@ -496,47 +417,52 @@ document.addEventListener("change", async (e) => {
   const newWinner = t.value;
   if (newWinner !== "A" && newWinner !== "B") return;
 
-  try {
-    await setWinner(matchIndex, newWinner);
-  } catch (err) {
-    console.error(err);
-  }
+  try { await setWinner(matchIndex, newWinner); } catch (err) { console.error(err); }
 });
 
 window.addEventListener("load", () => {
-  el("planId").value = todayISO();
+  // Home nav
+  el("goCreateBtn").addEventListener("click", () => showView("viewCreate"));
+  el("goJoinBtn").addEventListener("click", () => showView("viewJoin"));
 
-  el("joinBtn").addEventListener("click", async () => {
-    const pid = el("planId").value.trim() || todayISO();
-    el("planId").value = pid;
-    const pin = (el("pin")?.value || "").trim();
-    await joinSession(pid, pin);
-  });
+  // Back
+  el("createBackBtn").addEventListener("click", () => showView("viewHome"));
+  el("joinBackBtn").addEventListener("click", () => showView("viewHome"));
 
-  el("generateBtn").addEventListener("click", async () => {
-    const pid = el("planId").value.trim() || todayISO();
-    el("planId").value = pid;
+  // Create
+  el("createStartBtn").addEventListener("click", async () => {
+    const sid = el("createSessionId").value.trim();
+    const pin = el("createPin").value.trim();
+    const keep = el("createKeepScore").checked;
+    const playersText = el("createPlayers").value;
 
-    const pin = (el("pin")?.value || "").trim();
-    if (!pin) { alert("Skriv inn PIN."); return; }
+    if (!sid || !pin) { alert("Session ID og PIN må fylles ut."); return; }
 
-    if (!SESSION_ID || PLAN_ID !== pid || PIN !== pin) {
-      await joinSession(pid, pin);
-    }
-
-    const keep = el("keepScore").checked;
     try {
-      await createOrReplaceSession(keep);
+      await createSession(sid, pin, playersText, keep);
+      // match view åpnes av snapshot når doc finnes
     } catch (err) {
       console.error(err);
+      alert(err?.message || err);
     }
   });
 
-  el("newRoundBtn").addEventListener("click", async () => {
-    try { await resetRound(); } catch (err) { console.error(err); }
+  // Join
+  el("joinStartBtn").addEventListener("click", async () => {
+    const sid = el("joinSessionId").value.trim();
+    const pin = el("joinPin").value.trim();
+    if (!sid || !pin) { alert("Session ID og PIN må fylles ut."); return; }
+
+    try {
+      await join(sid, pin, { alertIfMissing: true });
+    } catch (err) {
+      console.error(err);
+      alert(err?.message || err);
+    }
   });
 
-  el("resetAllBtn").addEventListener("click", async () => {
-    try { await resetAll(); } catch (err) { console.error(err); }
-  });
+  // Match actions
+  el("leaveBtn").addEventListener("click", leave);
+  el("newRoundBtn").addEventListener("click", async () => { try { await resetRound(); } catch (e) { console.error(e); } });
+  el("resetAllBtn").addEventListener("click", async () => { try { await resetAll(); } catch (e) { console.error(e); } });
 });
