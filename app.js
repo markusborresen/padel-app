@@ -543,7 +543,9 @@ window.addEventListener("load", () => {
 
   // Generer oppsett (skriver til Firestore)
 
-  // DEBUG: skriv et synlig dokument med fast ID
+
+  
+  el("generateBtn").addEventListener("click", async () => {
   try {
     setStatus("DEBUG: prøver å skrive til Firestore…");
     await setDoc(sessionRef("debug_from_app"), { ping: Date.now(), from: "generateBtn" }, { merge: true });
@@ -551,10 +553,11 @@ window.addEventListener("load", () => {
   } catch (err) {
     console.error(err);
     setStatus("❌ DEBUG write feilet: " + (err?.message || err));
-    return; // stopp her – da vet vi at problemet er write/rules
+    return;
   }
-  
-  el("generateBtn").addEventListener("click", async () => {
+
+  // resten av generate-logikken din...
+});
     const pid = el("planId").value.trim() || todayISO();
     el("planId").value = pid;
 
@@ -599,6 +602,7 @@ window.addEventListener("load", () => {
 
   setStatus("Skriv Plan ID + PIN og trykk Join. Deretter kan du generere oppsett.");
 });
+
 
 
 
