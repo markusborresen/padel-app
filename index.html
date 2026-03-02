@@ -77,10 +77,13 @@
 
 <body>
   <div class="card">
+
     <!-- HOME -->
     <div id="viewHome" class="view active">
       <h1>Padelplan</h1>
-      <div class="muted" style="margin-bottom:12px;">Velg om du vil opprette en ny session, eller joine en eksisterende.</div>
+      <div class="muted" style="margin-bottom:12px;">
+        Create genererer en PIN automatisk. Join bruker kun PIN.
+      </div>
 
       <div class="row">
         <button class="btn big primary" id="goCreateBtn">Create</button>
@@ -92,31 +95,10 @@
     <div id="viewCreate" class="view">
       <h1>Create session</h1>
 
-      <div class="row">
-        <div>
-          <label for="createSessionId">Session ID</label>
-          <input id="createSessionId" type="text" placeholder="mandag-18" />
-          <div class="muted">Del denne med gruppa.</div>
-        </div>
-
-        <div>
-          <label for="createPin">PIN</label>
-          <input id="createPin" type="password" inputmode="numeric" placeholder="4821" />
-          <div class="muted">Alle må bruke samme PIN.</div>
-        </div>
-
-        <div>
-          <label for="createKeepScore">Ved nytt oppsett</label>
-          <div style="display:flex; gap:10px; align-items:center;">
-            <input id="createKeepScore" type="checkbox" checked />
-            <span class="muted">Behold poeng</span>
-          </div>
-        </div>
-      </div>
-
       <div style="margin-top:12px;">
         <label for="createPlayers">Spillere (én per linje)</label>
         <textarea id="createPlayers" placeholder="Markus&#10;Partap&#10;..."></textarea>
+        <div class="muted">PIN blir generert automatisk når du trykker “Opprett og start”.</div>
       </div>
 
       <div class="row" style="margin-top:12px;">
@@ -131,22 +113,15 @@
 
       <div class="row">
         <div>
-          <label for="joinSessionId">Session ID</label>
-          <input id="joinSessionId" type="text" placeholder="mandag-18" />
-        </div>
-        <div>
           <label for="joinPin">PIN</label>
-          <input id="joinPin" type="password" inputmode="numeric" placeholder="4821" />
+          <input id="joinPin" type="password" inputmode="numeric" placeholder="123456" />
+          <div class="muted">Skriv inn PIN fra den som opprettet sessionen.</div>
         </div>
       </div>
 
       <div class="row" style="margin-top:12px;">
         <button class="btn" id="joinBackBtn">Tilbake</button>
         <button class="btn primary" id="joinStartBtn">Join</button>
-      </div>
-
-      <div class="muted" style="margin-top:10px;">
-        Hvis du får blank side: sjekk at noen har trykket “Opprett og start” på Create først.
       </div>
     </div>
 
@@ -157,7 +132,10 @@
           <h1 style="margin-bottom:4px;">Match</h1>
           <div class="muted" id="matchInfo"></div>
         </div>
-        <button class="btn" id="leaveBtn">Leave</button>
+        <div class="row">
+          <button class="btn" id="copyPinBtn">Kopier PIN</button>
+          <button class="btn" id="leaveBtn">Leave</button>
+        </div>
       </div>
 
       <div class="row" style="margin-top:8px;">
@@ -187,6 +165,7 @@
       <h2>Poeng</h2>
       <div id="scores" class="scoregrid"></div>
     </div>
+
   </div>
 
   <script type="module" src="./app.js"></script>
