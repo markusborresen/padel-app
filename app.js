@@ -22,18 +22,27 @@ const firebaseReady = signInAnonymously(auth);
 
 const COLLECTION = "sessions";
 
-/* ===== Session id: sha256(sessionId|pin) ===== */
+/* ===== PIN-only docId: sha256("padel|PIN") ===== */
 async function sha256Hex(input) {
   const data = new TextEncoder().encode(input);
   const hash = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
-async function getDocId(sessionId, pin) {
-  const hex = await sha256Hex(`${sessionId}|${pin}`);
+async function getDocIdFromPin(pin) {
+  const hex = await sha256Hex(`padel|${pin}`);
   return hex.slice(0, 24);
 }
 function sessionRef(docId) {
   return doc(db, COLLECTION, docId);
+}
+
+/* ===== PIN generator (6 siffer) ===== */
+function generatePin6() {
+  // 100000–999999 (6 digits)
+  const buf = new Uint32Array(1);
+  crypto.getRandomValues(buf);
+  const n = buf[0] % 900000; // 0..899999
+  return String(100000 + n);
 }
 
 /* ===== Scheduler (samme som før) ===== */
@@ -181,7 +190,7 @@ function buildSchedule(players, seed) {
   return { schedule: best, perfectMode };
 }
 
-/* ===== State ===== */
+/* ===== State / UI ===== */
 const el = (id) => document.getElementById(id);
 function showView(name) {
   for (const id of ["viewHome","viewCreate","viewJoin","viewMatch"]) {
@@ -189,7 +198,6 @@ function showView(name) {
   }
 }
 
-let CURRENT_SESSION_ID = "";
 let CURRENT_PIN = "";
 let CURRENT_DOC_ID = null;
 let unsubscribe = null;
@@ -219,7 +227,7 @@ function parsePlayers(text) {
 
 /* ===== Rendering ===== */
 function renderMatchInfo() {
-  el("matchInfo").textContent = CURRENT_SESSION_ID ? `Session: ${CURRENT_SESSION_ID}` : "";
+  el("matchInfo").textContent = CURRENT_PIN ? `PIN: ${CURRENT_PIN}` : "";
 }
 function renderSchedule() {
   const body = el("scheduleBody");
@@ -270,18 +278,18 @@ function hydrate(data) {
 }
 
 /* ===== Firestore ops ===== */
-async function join(sessionId, pin, { alertIfMissing = true } = {}) {
+async function joinByPin(pin, { alertIfMissing = true } = {}) {
   await firebaseReady;
-  CURRENT_SESSION_ID = sessionId.trim();
-  CURRENT_PIN = pin.trim();
-  if (!CURRENT_SESSION_ID || !CURRENT_PIN) return false;
 
-  CURRENT_DOC_ID = await getDocId(CURRENT_SESSION_ID, CURRENT_PIN);
+  CURRENT_PIN = pin.trim();
+  if (!CURRENT_PIN) return false;
+
+  CURRENT_DOC_ID = await getDocIdFromPin(CURRENT_PIN);
 
   if (unsubscribe) unsubscribe();
   unsubscribe = onSnapshot(sessionRef(CURRENT_DOC_ID), (snap) => {
     if (!snap.exists()) {
-      if (alertIfMissing) alert("Fant ingen session. Be noen trykke Create først.");
+      if (alertIfMissing) alert("Fant ingen session. Sjekk PIN.");
       return;
     }
     hydrate(snap.data());
@@ -291,7 +299,7 @@ async function join(sessionId, pin, { alertIfMissing = true } = {}) {
   return true;
 }
 
-async function createSession(sessionId, pin, playersText, keepScore) {
+async function createSessionWithAutoPin(playersText) {
   await firebaseReady;
 
   const players = parsePlayers(playersText);
@@ -300,32 +308,46 @@ async function createSession(sessionId, pin, playersText, keepScore) {
     return;
   }
 
-  await join(sessionId, pin, { alertIfMissing: false });
+  // Prøv å lage en PIN som ikke kolliderer (svært sjelden)
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const pin = generatePin6();
+    const docId = await getDocIdFromPin(pin);
+    const ref = sessionRef(docId);
 
-  const seed = (Date.now() >>> 0);
-  const res = buildSchedule(players, seed);
-  const matches = res.schedule;
+    try {
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        if (snap.exists()) throw new Error("PIN_COLLISION");
 
-  const ref = sessionRef(CURRENT_DOC_ID);
+        const seed = (Date.now() >>> 0);
+        const res = buildSchedule(players, seed);
+        const matches = res.schedule;
 
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
+        const scores = initEmptyScores(players);
 
-    let existingScores = {};
-    if (keepScore && snap.exists()) existingScores = snap.data().scores || {};
+        tx.set(ref, {
+          pin,
+          players,
+          matches,
+          winners: {},
+          scores,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        }, { merge: false });
+      });
 
-    const scores = {};
-    for (const p of players) scores[p] = Number(existingScores[p] || 0);
+      // Start live-listener og gå til match
+      await joinByPin(pin, { alertIfMissing: false });
+      return;
+    } catch (err) {
+      if ((err?.message || "") === "PIN_COLLISION") continue;
+      console.error(err);
+      alert(err?.message || err);
+      return;
+    }
+  }
 
-    tx.set(ref, {
-      sessionId: CURRENT_SESSION_ID,
-      players,
-      matches,
-      winners: {},
-      scores,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
-  });
+  alert("Klarte ikke å generere unik PIN. Prøv igjen.");
 }
 
 async function setWinner(matchIndex, newWinner) {
@@ -390,7 +412,6 @@ function leave() {
   if (unsubscribe) unsubscribe();
   unsubscribe = null;
 
-  CURRENT_SESSION_ID = "";
   CURRENT_PIN = "";
   CURRENT_DOC_ID = null;
 
@@ -429,40 +450,32 @@ window.addEventListener("load", () => {
   el("createBackBtn").addEventListener("click", () => showView("viewHome"));
   el("joinBackBtn").addEventListener("click", () => showView("viewHome"));
 
-  // Create
+  // Create (auto PIN)
   el("createStartBtn").addEventListener("click", async () => {
-    const sid = el("createSessionId").value.trim();
-    const pin = el("createPin").value.trim();
-    const keep = el("createKeepScore").checked;
     const playersText = el("createPlayers").value;
-
-    if (!sid || !pin) { alert("Session ID og PIN må fylles ut."); return; }
-
-    try {
-      await createSession(sid, pin, playersText, keep);
-      // match view åpnes av snapshot når doc finnes
-    } catch (err) {
-      console.error(err);
-      alert(err?.message || err);
-    }
+    await createSessionWithAutoPin(playersText);
   });
 
-  // Join
+  // Join (PIN only)
   el("joinStartBtn").addEventListener("click", async () => {
-    const sid = el("joinSessionId").value.trim();
     const pin = el("joinPin").value.trim();
-    if (!sid || !pin) { alert("Session ID og PIN må fylles ut."); return; }
-
-    try {
-      await join(sid, pin, { alertIfMissing: true });
-    } catch (err) {
-      console.error(err);
-      alert(err?.message || err);
-    }
+    if (!pin) { alert("Skriv inn PIN."); return; }
+    await joinByPin(pin, { alertIfMissing: true });
   });
 
   // Match actions
   el("leaveBtn").addEventListener("click", leave);
   el("newRoundBtn").addEventListener("click", async () => { try { await resetRound(); } catch (e) { console.error(e); } });
   el("resetAllBtn").addEventListener("click", async () => { try { await resetAll(); } catch (e) { console.error(e); } });
+
+  // Copy PIN
+  el("copyPinBtn").addEventListener("click", async () => {
+    if (!CURRENT_PIN) return;
+    try {
+      await navigator.clipboard.writeText(CURRENT_PIN);
+    } catch (e) {
+      // fallback: prompt
+      prompt("Kopier PIN:", CURRENT_PIN);
+    }
+  });
 });
