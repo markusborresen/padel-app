@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Padelplan – Statistikk</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="card">
+
+    <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <h1 style="margin:0;">Statistikk</h1>
+      <a href="./index.html" class="btn">← Hjem</a>
+    </div>
+
+    <div id="loadingMsg" class="muted">Laster statistikk…</div>
+
+    <div id="mainContent" style="display:none;">
+
+      <p id="sessionCount" class="muted" style="margin-bottom:12px;"></p>
+
+      <!-- Leaderboard -->
+      <h2>Poengliga</h2>
+      <table class="stats-table" id="leaderboard">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Spiller</th>
+            <th>Seire</th>
+            <th>Kamper</th>
+            <th>Vinn%</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboardBody"></tbody>
+      </table>
+
+      <!-- Recent sessions -->
+      <h2 style="margin-top:20px;">Siste sesjoner</h2>
+      <div id="recentSessions"></div>
+
+    </div>
+
+    <div id="emptyMsg" style="display:none;" class="muted">
+      Ingen avsluttede sesjoner ennå. Spill en kamp og avslutt den for å se statistikk her.
+    </div>
+
+  </div>
+
+  <script type="module" src="./stats.js"></script>
+</body>
+</html>

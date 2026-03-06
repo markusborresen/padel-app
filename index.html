@@ -4,104 +4,50 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Padelplan</title>
-  <style>
-    body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial; margin: 12px; }
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 12px; max-width: 980px; }
-    h1 { font-size: 18px; margin: 0 0 10px 0; }
-    h2 { font-size: 16px; margin: 14px 0 6px 0; }
-
-    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-    label { font-size: 12px; color: #444; display:block; margin-bottom: 4px; }
-    input[type="text"], input[type="password"] { padding: 8px 10px; border: 1px solid #ddd; border-radius: 10px; font-size: 14px; }
-    textarea { width: 360px; max-width: 100%; height: 160px; padding: 10px; border: 1px solid #ddd; border-radius: 10px; font-size: 14px; }
-    .muted { color: #666; font-size: 12px; line-height: 1.35; }
-
-    .btn {
-      display:inline-block; padding: 10px 14px; border:1px solid #ddd; border-radius:12px;
-      background:#fff; cursor:pointer; font-size:14px;
-    }
-    .btn:active { transform: translateY(1px); }
-    .btn.primary { border-color: #111; background:#111; color:#fff; }
-    .btn.big { padding: 14px 18px; font-size: 16px; border-radius: 14px; }
-
-    table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 10px; }
-    th, td { padding: 8px 6px; border-bottom: 1px solid #eee; vertical-align: top; }
-    th { text-align: left; font-size: 13px; }
-    td { font-size: 14px; }
-
-    .col-kamp { width: 10%; }
-    .col-lag  { width: 32%; }
-    .col-win  { width: 26%; }
-
-    .c-lag { overflow: hidden; text-overflow: ellipsis; }
-
-    .winnercell { white-space: nowrap; }
-    .winseg { display:flex; gap: 10px; align-items: stretch; justify-content: space-between; max-width: 240px; }
-    .winradio { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
-    .winbtn {
-      flex: 1; text-align:center; padding: 10px 0;
-      border:1px solid #ddd; border-radius: 14px;
-      font-weight: 800; user-select: none; -webkit-tap-highlight-color: transparent;
-      font-size: 18px;
-    }
-    .winradio:checked + .winbtn { background:#111; color:#fff; border-color:#111; }
-    .winbtn:active { transform: translateY(1px); }
-
-    .scoregrid { display:grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin-top: 10px; }
-    .pill { display:inline-block; padding: 2px 7px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; margin-right: 8px; }
-
-    .view { display: none; }
-    .view.active { display: block; }
-
-    @media (max-width: 520px) {
-      body { margin: 8px; }
-      .card { padding: 10px; border-radius: 10px; }
-      textarea { width: 100%; height: 140px; }
-
-      th, td { padding: 6px 4px; }
-      th { font-size: 12px; }
-      td { font-size: 13px; }
-
-      .col-kamp { width: 12%; }
-      .col-lag  { width: 28%; }
-      .col-win  { width: 32%; }
-
-      .c-lag { font-size: 12.5px; }
-      .winseg { max-width: 280px; gap: 12px; }
-      .winbtn { padding: 12px 0; font-size: 22px; }
-
-      .scoregrid { grid-template-columns: 1fr; }
-    }
-  </style>
+  <link rel="stylesheet" href="./style.css" />
 </head>
-
 <body>
   <div class="card">
 
     <!-- HOME -->
     <div id="viewHome" class="view active">
       <h1>Padelplan</h1>
-      <div class="muted" style="margin-bottom:12px;">
-        Create genererer en PIN automatisk. Join bruker kun PIN.
-      </div>
-
+      <p class="muted" style="margin-bottom:14px;">
+        Lag et kampoppsett for padel med automatisk trekking og poengføring.
+      </p>
       <div class="row">
-        <button class="btn big primary" id="goCreateBtn">Create</button>
-        <button class="btn big" id="goJoinBtn">Join</button>
+        <button class="btn big primary" id="goCreateBtn">Opprett sesjon</button>
+        <button class="btn big" id="goJoinBtn">Bli med</button>
+        <a href="./stats.html" class="btn big">Statistikk</a>
       </div>
     </div>
 
     <!-- CREATE -->
     <div id="viewCreate" class="view">
-      <h1>Create session</h1>
+      <h1>Opprett sesjon</h1>
 
       <div style="margin-top:12px;">
-        <label for="createPlayers">Spillere (én per linje)</label>
-        <textarea id="createPlayers" placeholder="Markus&#10;Partap&#10;..."></textarea>
-        <div class="muted">PIN blir generert automatisk når du trykker “Opprett og start”.</div>
+        <label for="createPlayers">Spillere (én per linje, minimum 4)</label>
+        <textarea id="createPlayers" placeholder="Markus&#10;Partap&#10;Jonas&#10;Erik&#10;..."></textarea>
       </div>
 
-      <div class="row" style="margin-top:12px;">
+      <div style="margin-top:10px;">
+        <label for="createCourts">Antall baner</label>
+        <select id="createCourts">
+          <option value="1">1 bane</option>
+          <option value="2" selected>2 baner</option>
+          <option value="3">3 baner</option>
+          <option value="4">4 baner</option>
+          <option value="5">5 baner</option>
+          <option value="6">6 baner</option>
+        </select>
+      </div>
+
+      <p class="muted" style="margin-top:8px;">
+        PIN genereres automatisk. Del den med de andre spillerne slik at de kan bli med.
+      </p>
+
+      <div class="row" style="margin-top:14px;">
         <button class="btn" id="createBackBtn">Tilbake</button>
         <button class="btn primary" id="createStartBtn">Opprett og start</button>
       </div>
@@ -109,61 +55,23 @@
 
     <!-- JOIN -->
     <div id="viewJoin" class="view">
-      <h1>Join session</h1>
+      <h1>Bli med i sesjon</h1>
 
-      <div class="row">
-        <div>
-          <label for="joinPin">PIN</label>
-          <input id="joinPin" type="password" inputmode="numeric" placeholder="123456" />
-          <div class="muted">Skriv inn PIN fra den som opprettet sessionen.</div>
-        </div>
+      <div style="margin-top:12px;">
+        <label for="joinPin">PIN</label>
+        <input id="joinPin" type="password" inputmode="numeric" placeholder="123456" style="width:140px;" />
+        <p class="muted" style="margin-top:6px;">Skriv inn PIN fra den som opprettet sesjonen.</p>
       </div>
 
-      <div class="row" style="margin-top:12px;">
+      <div class="row" style="margin-top:14px;">
         <button class="btn" id="joinBackBtn">Tilbake</button>
-        <button class="btn primary" id="joinStartBtn">Join</button>
+        <button class="btn primary" id="joinStartBtn">Bli med</button>
       </div>
     </div>
 
-    <!-- MATCH -->
-    <div id="viewMatch" class="view">
-      <div class="row" style="justify-content:space-between; align-items:center;">
-        <div>
-          <h1 style="margin-bottom:4px;">Match</h1>
-          <div class="muted" id="matchInfo"></div>
-        </div>
-        <div class="row">
-          <button class="btn" id="copyPinBtn">Kopier PIN</button>
-          <button class="btn" id="leaveBtn">Leave</button>
-        </div>
-      </div>
-
-      <div class="row" style="margin-top:8px;">
-        <button class="btn" id="newRoundBtn">Ny runde</button>
-        <button class="btn" id="resetAllBtn">Nullstill alt</button>
-      </div>
-
-      <h2>Oppsett</h2>
-      <table>
-        <colgroup>
-          <col class="col-kamp" />
-          <col class="col-lag" />
-          <col class="col-lag" />
-          <col class="col-win" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th>Kamp</th>
-            <th>Lag A</th>
-            <th>Lag B</th>
-            <th>Vinner</th>
-          </tr>
-        </thead>
-        <tbody id="scheduleBody"></tbody>
-      </table>
-
-      <h2>Poeng</h2>
-      <div id="scores" class="scoregrid"></div>
+    <!-- LOADING -->
+    <div id="viewLoading" class="view">
+      <p class="muted">Genererer kampprogram…</p>
     </div>
 
   </div>

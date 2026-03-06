@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Padelplan – Kamp</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="card">
+
+    <!-- Top bar -->
+    <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h1 style="margin:0;">Padelplan</h1>
+      <div class="row">
+        <span id="pinDisplay" class="muted" style="font-size:13px; align-self:center;"></span>
+        <button class="btn" id="copyPinBtn" style="padding:6px 10px; font-size:12px;">Kopier PIN</button>
+      </div>
+    </div>
+
+    <!-- Completed banner (hidden by default) -->
+    <div id="completedBanner" class="banner" style="display:none;">
+      Sesjonen er avsluttet. <a href="./stats.html">Se statistikk →</a>
+    </div>
+
+    <!-- Loading state -->
+    <div id="loadingMsg" class="muted">Laster sesjon…</div>
+
+    <!-- Main content (hidden until loaded) -->
+    <div id="mainContent" style="display:none;">
+
+      <!-- Round navigation -->
+      <div class="round-header">
+        <button class="btn" id="prevRoundBtn" style="padding:8px 12px;">←</button>
+        <div class="round-title" id="roundTitle">Runde 1 av 1</div>
+        <button class="btn" id="nextRoundBtn" style="padding:8px 12px;">→</button>
+      </div>
+
+      <!-- Courts for current round -->
+      <div id="courtsContainer"></div>
+
+      <!-- Resting players -->
+      <div id="restingLine" class="resting"></div>
+
+      <!-- Scores -->
+      <h2>Poeng</h2>
+      <div id="scores" class="scoregrid"></div>
+
+      <!-- Actions -->
+      <div class="row" style="margin-top:16px; justify-content:space-between;">
+        <button class="btn danger" id="endSessionBtn">Avslutt sesjon</button>
+        <button class="btn" id="leaveBtn">Forlat</button>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module" src="./match.js"></script>
+</body>
+</html>
