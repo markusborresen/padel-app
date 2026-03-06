@@ -173,5 +173,6 @@ export function buildSchedule(players, numCourts, seed) {
     if (s < bestScore) { best = next; bestScore = s; }
   }
 
-  return { rounds: best };
+  // Wrap each round as { courts: [...] } — Firestore does not support nested arrays
+  return { rounds: best.map(courts => ({ courts })) };
 }

@@ -1,6 +1,6 @@
 import { db, firebaseReady } from "./firebase.js";
 import {
-  collection, getDocs, orderBy, query, limit
+  collection, getDocs
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
 const el = id => document.getElementById(id);
@@ -17,20 +17,24 @@ function winPct(wins, matches) {
 }
 
 async function loadStats() {
-  await firebaseReady;
+  try {
+    await firebaseReady;
+  } catch (err) {
+    el("loadingMsg").textContent = "Klarte ikke å koble til Firebase: " + (err?.message || err);
+    return;
+  }
 
   let docs;
   try {
-    const q = query(
-      collection(db, "history"),
-      orderBy("completedAt", "desc"),
-      limit(50)
-    );
-    const snap = await getDocs(q);
+    // Simple getDocs without orderBy — sort client-side to avoid index requirements
+    const snap = await getDocs(collection(db, "history"));
     docs = snap.docs.map(d => d.data());
   } catch (err) {
     console.error(err);
-    el("loadingMsg").textContent = "Klarte ikke å laste statistikk.";
+    el("loadingMsg").innerHTML =
+      `Klarte ikke å laste statistikk.<br>
+       <span style="font-size:12px;">Husk å oppdatere Firestore-reglene til å inkludere <code>history</code>-samlingen (se instruksjoner under).</span>`;
+    el("rulesNote").style.display = "block";
     return;
   }
 
@@ -41,8 +45,16 @@ async function loadStats() {
     return;
   }
 
+  // Sort by completedAt descending (client-side)
+  docs.sort((a, b) => {
+    const ta = a.completedAt?.toMillis?.() ?? 0;
+    const tb = b.completedAt?.toMillis?.() ?? 0;
+    return tb - ta;
+  });
+
   el("mainContent").style.display = "block";
-  el("sessionCount").textContent = `${docs.length} avsluttede sesjon${docs.length === 1 ? "" : "er"} registrert`;
+  el("sessionCount").textContent =
+    `${docs.length} avsluttet sesjon${docs.length === 1 ? "" : "er"} registrert`;
 
   /* ===== Aggregate leaderboard ===== */
   const playerStats = new Map(); // name -> { wins, matches }

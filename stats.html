@@ -45,6 +45,16 @@
       Ingen avsluttede sesjoner ennå. Spill en kamp og avslutt den for å se statistikk her.
     </div>
 
+    <!-- Shown if Firestore rules block the history collection -->
+    <div id="rulesNote" style="display:none; margin-top:12px; font-size:12px; color:#666; border:1px solid #eee; border-radius:8px; padding:10px;">
+      <b>Slik fikser du det:</b> Gå til
+      <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a>
+      → Firestore → Rules, og legg til tilgang for <code>history</code>:
+      <pre style="margin:6px 0; background:#f5f5f5; padding:6px; border-radius:4px; font-size:11px;">match /history/{doc} {
+  allow read, write: if request.auth != null;
+}</pre>
+    </div>
+
   </div>
 
   <script type="module" src="./stats.js"></script>

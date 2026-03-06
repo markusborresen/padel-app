@@ -11,7 +11,7 @@ let CURRENT_DOC_ID = null;
 let unsubscribe = null;
 
 let PLAYERS = [];
-let ROUNDS = [];
+let ROUNDS = [];       // [{ courts: [{a,b}, {a,b}] }, ...]
 let CURRENT_ROUND = 0;
 let WINNERS = {};
 let SCORES = {};
@@ -19,13 +19,6 @@ let STATUS = "active";
 
 /* ===== DOM helpers ===== */
 const el = id => document.getElementById(id);
-
-function setDisabled(disabled) {
-  el("endSessionBtn").disabled = disabled;
-  el("prevRoundBtn").disabled = disabled;
-  el("nextRoundBtn").disabled = disabled;
-  el("courtsContainer").querySelectorAll("input").forEach(i => i.disabled = disabled);
-}
 
 /* ===== Rendering ===== */
 function renderRoundNav() {
@@ -38,10 +31,11 @@ function renderCurrentRound() {
   const container = el("courtsContainer");
   container.innerHTML = "";
 
-  const round = ROUNDS[CURRENT_ROUND] || [];
+  // Each round is { courts: [match, match, ...] }
+  const courts = (ROUNDS[CURRENT_ROUND] || {}).courts || [];
   const activePlayers = new Set();
 
-  round.forEach((match, courtIdx) => {
+  courts.forEach((match, courtIdx) => {
     activePlayers.add(match.a[0]); activePlayers.add(match.a[1]);
     activePlayers.add(match.b[0]); activePlayers.add(match.b[1]);
 
@@ -120,8 +114,8 @@ async function setWinner(roundIdx, courtIdx, newWinner) {
     if (!snap.exists()) return;
 
     const data = snap.data();
-    const round = (data.rounds || [])[roundIdx] || [];
-    const match = round[courtIdx];
+    // rounds[i] is { courts: [...] }
+    const match = ((data.rounds || [])[roundIdx]?.courts || [])[courtIdx];
     if (!match) return;
 
     const winners = { ...(data.winners || {}) };
@@ -156,11 +150,11 @@ async function endSession() {
   if (!CURRENT_DOC_ID) return;
   if (!confirm("Avslutte sesjonen og lagre resultatet til statistikk?")) return;
 
-  // Compute totalMatches per player (how many matches they appeared in)
+  // Compute totalMatches per player across all rounds
   const totalMatches = {};
   for (const p of PLAYERS) totalMatches[p] = 0;
   for (const round of ROUNDS) {
-    for (const match of round) {
+    for (const match of (round.courts || [])) {
       for (const p of [...match.a, ...match.b]) {
         totalMatches[p] = (totalMatches[p] || 0) + 1;
       }
@@ -168,11 +162,10 @@ async function endSession() {
   }
 
   try {
-    // Write history doc
     await addDoc(historyCol(), {
       pin: CURRENT_PIN,
       players: PLAYERS,
-      numCourts: ROUNDS[0]?.length || 1,
+      numCourts: ROUNDS[0]?.courts?.length || 1,
       rounds: ROUNDS,
       winners: WINNERS,
       finalScores: { ...SCORES },
@@ -180,7 +173,6 @@ async function endSession() {
       completedAt: serverTimestamp(),
     });
 
-    // Mark session completed
     await updateDoc(sessionRef(CURRENT_DOC_ID), {
       status: "completed",
       updatedAt: serverTimestamp(),
@@ -189,7 +181,7 @@ async function endSession() {
     window.location.href = "./stats.html";
   } catch (err) {
     console.error(err);
-    alert("Noe gikk galt. Prøv igjen.");
+    alert("Noe gikk galt ved avslutning: " + (err?.message || err));
   }
 }
 
@@ -200,28 +192,41 @@ function leave() {
 
 /* ===== Init ===== */
 async function init() {
-  await firebaseReady;
+  try {
+    await firebaseReady;
+  } catch (err) {
+    el("loadingMsg").textContent = "Klarte ikke å koble til Firebase: " + (err?.message || err);
+    return;
+  }
 
-  const hash = window.location.hash; // e.g. "#pin=123456"
-  const match = hash.match(/[#&]pin=(\d+)/);
-  if (!match) {
+  const hash = window.location.hash;
+  const m = hash.match(/[#&]pin=(\d+)/);
+  if (!m) {
     el("loadingMsg").textContent = "Ingen PIN funnet. Gå tilbake og prøv igjen.";
     return;
   }
 
-  CURRENT_PIN = match[1];
+  CURRENT_PIN = m[1];
   el("pinDisplay").textContent = `PIN: ${CURRENT_PIN}`;
   CURRENT_DOC_ID = await getDocIdFromPin(CURRENT_PIN);
 
-  unsubscribe = onSnapshot(sessionRef(CURRENT_DOC_ID), (snap) => {
-    if (!snap.exists()) {
-      el("loadingMsg").textContent = "Fant ingen sesjon med denne PIN-en.";
+  unsubscribe = onSnapshot(
+    sessionRef(CURRENT_DOC_ID),
+    (snap) => {
+      if (!snap.exists()) {
+        el("loadingMsg").textContent = "Fant ingen sesjon med denne PIN-en.";
+        el("loadingMsg").style.display = "block";
+        el("mainContent").style.display = "none";
+        return;
+      }
+      hydrate(snap.data());
+    },
+    (err) => {
+      console.error(err);
+      el("loadingMsg").textContent = "Tilgangsfeil: " + (err?.message || err);
       el("loadingMsg").style.display = "block";
-      el("mainContent").style.display = "none";
-      return;
     }
-    hydrate(snap.data());
-  });
+  );
 }
 
 /* ===== Event wiring ===== */
@@ -236,14 +241,20 @@ window.addEventListener("load", () => {
     if (!Number.isFinite(roundIdx) || !Number.isFinite(courtIdx)) return;
     if (input.value !== "A" && input.value !== "B") return;
     try { await setWinner(roundIdx, courtIdx, input.value); }
-    catch (err) { console.error(err); }
+    catch (err) { console.error("setWinner feil:", err); }
   });
 
   el("prevRoundBtn").addEventListener("click", async () => {
-    if (CURRENT_ROUND > 0) await goToRound(CURRENT_ROUND - 1);
+    if (CURRENT_ROUND > 0) {
+      try { await goToRound(CURRENT_ROUND - 1); }
+      catch (err) { console.error(err); }
+    }
   });
   el("nextRoundBtn").addEventListener("click", async () => {
-    if (CURRENT_ROUND < ROUNDS.length - 1) await goToRound(CURRENT_ROUND + 1);
+    if (CURRENT_ROUND < ROUNDS.length - 1) {
+      try { await goToRound(CURRENT_ROUND + 1); }
+      catch (err) { console.error(err); }
+    }
   });
 
   el("copyPinBtn").addEventListener("click", async () => {
