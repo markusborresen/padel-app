@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Padelplan – Kampdetaljer</title>
+  <link rel="stylesheet" href="./style.css" />
+  <style>
+    .round-block {
+      border: 1px solid #eee;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .round-block-header {
+      background: #f7f7f7;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: #666;
+    }
+    .match-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-top: 1px solid #f0f0f0;
+      font-size: 14px;
+      flex-wrap: wrap;
+    }
+    .match-row:first-of-type { border-top: none; }
+    .court-tag {
+      font-size: 11px;
+      font-weight: 700;
+      color: #999;
+      min-width: 44px;
+    }
+    .match-teams { flex: 1; }
+    .winner-tag {
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #111;
+      color: #fff;
+      white-space: nowrap;
+    }
+    .winner-tag.none {
+      background: #f0f0f0;
+      color: #999;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 12px 0;
+    }
+    .meta-cell {
+      background: #f7f7f7;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .meta-label { font-size: 11px; color: #888; margin-bottom: 2px; }
+    .meta-value { font-size: 16px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <h1 style="margin:0;">Kampdetaljer</h1>
+      <a href="./stats.html" class="btn">← Statistikk</a>
+    </div>
+
+    <div id="loadingMsg" class="muted">Laster kamp…</div>
+
+    <div id="mainContent" style="display:none;">
+
+      <p id="kampDate" class="muted" style="margin-bottom:12px; font-size:14px;"></p>
+
+      <!-- Meta stats -->
+      <div class="meta-grid" id="metaGrid"></div>
+
+      <!-- Players -->
+      <h2>Spillere</h2>
+      <div id="playersList" style="margin-bottom:4px;"></div>
+
+      <!-- Final scores -->
+      <h2>Sluttresultat</h2>
+      <div id="finalScores" class="scoregrid" style="margin-bottom:4px;"></div>
+
+      <!-- All rounds -->
+      <h2 style="margin-top:16px;">Alle runder</h2>
+      <div id="roundsList"></div>
+
+    </div>
+  </div>
+
+  <script type="module" src="./kamp.js"></script>
+</body>
+</html>

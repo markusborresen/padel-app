@@ -1,6 +1,6 @@
 import { db, firebaseReady } from "./firebase.js";
 import {
-  collection, getDocs
+  collection, getDocs, deleteDoc, doc
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
 const el = id => document.getElementById(id);
@@ -16,6 +16,16 @@ function winPct(wins, matches) {
   return Math.round((wins / matches) * 100) + "%";
 }
 
+/* ===== Dev: reset via browser console ===== */
+// Open devtools and run: _resetStats()
+async function resetStats() {
+  if (!confirm("Sletter ALL historikk (kun for testing). Fortsett?")) return;
+  const snap = await getDocs(collection(db, "history"));
+  await Promise.all(snap.docs.map(d => deleteDoc(doc(db, "history", d.id))));
+  console.log(`Slettet ${snap.docs.length} kamper.`);
+  location.reload();
+}
+
 async function loadStats() {
   try {
     await firebaseReady;
@@ -24,11 +34,13 @@ async function loadStats() {
     return;
   }
 
-  let docs;
+  // Expose reset function only after Firebase is ready
+  window._resetStats = resetStats;
+
+  let entries; // [{ id, data }]
   try {
-    // Simple getDocs without orderBy — sort client-side to avoid index requirements
     const snap = await getDocs(collection(db, "history"));
-    docs = snap.docs.map(d => d.data());
+    entries = snap.docs.map(d => ({ id: d.id, data: d.data() }));
   } catch (err) {
     console.error(err);
     el("loadingMsg").innerHTML =
@@ -40,29 +52,28 @@ async function loadStats() {
 
   el("loadingMsg").style.display = "none";
 
-  if (!docs.length) {
+  if (!entries.length) {
     el("emptyMsg").style.display = "block";
     return;
   }
 
   // Sort by completedAt descending (client-side)
-  docs.sort((a, b) => {
-    const ta = a.completedAt?.toMillis?.() ?? 0;
-    const tb = b.completedAt?.toMillis?.() ?? 0;
+  entries.sort((a, b) => {
+    const ta = a.data.completedAt?.toMillis?.() ?? 0;
+    const tb = b.data.completedAt?.toMillis?.() ?? 0;
     return tb - ta;
   });
 
   el("mainContent").style.display = "block";
   el("sessionCount").textContent =
-    `${docs.length} avsluttet sesjon${docs.length === 1 ? "" : "er"} registrert`;
+    `${entries.length} avsluttet kamp${entries.length === 1 ? "" : "er"} registrert`;
 
   /* ===== Aggregate leaderboard ===== */
   const playerStats = new Map(); // name -> { wins, matches }
 
-  for (const data of docs) {
+  for (const { data } of entries) {
     const finalScores = data.finalScores || {};
     const totalMatches = data.totalMatches || {};
-
     for (const [player, wins] of Object.entries(finalScores)) {
       const cur = playerStats.get(player) || { wins: 0, matches: 0 };
       cur.wins += wins;
@@ -93,9 +104,9 @@ async function loadStats() {
     tbody.appendChild(tr);
   });
 
-  /* ===== Recent sessions ===== */
+  /* ===== Recent matches (clickable) ===== */
   const recentContainer = el("recentSessions");
-  for (const data of docs.slice(0, 10)) {
+  for (const { id, data } of entries.slice(0, 20)) {
     const finalScores = data.finalScores || {};
     const topPlayers = Object.entries(finalScores)
       .sort((a, b) => b[1] - a[1])
@@ -106,17 +117,33 @@ async function loadStats() {
     const numRounds = (data.rounds || []).length;
     const numCourts = data.numCourts || 1;
     const dateStr = formatDate(data.completedAt);
+    const playerCount = (data.players || []).length;
 
-    const div = document.createElement("div");
-    div.style.cssText = "border:1px solid #eee; border-radius:10px; padding:10px 12px; margin-bottom:8px;";
-    div.innerHTML = `
+    const a = document.createElement("a");
+    a.href = `./kamp.html?id=${id}`;
+    a.style.cssText = [
+      "display:block",
+      "border:1px solid #eee",
+      "border-radius:10px",
+      "padding:10px 12px",
+      "margin-bottom:8px",
+      "text-decoration:none",
+      "color:inherit",
+      "transition:background 0.1s",
+    ].join(";");
+    a.onmouseenter = () => a.style.background = "#f9f9f9";
+    a.onmouseleave = () => a.style.background = "";
+
+    a.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:baseline;">
-        <span style="font-size:13px; font-weight:700;">${(data.players || []).length} spillere · ${numRounds} runder · ${numCourts} bane${numCourts > 1 ? "r" : ""}</span>
+        <span style="font-size:13px; font-weight:700;">
+          ${playerCount} spillere · ${numRounds} runder · ${numCourts} bane${numCourts > 1 ? "r" : ""}
+        </span>
         <span class="muted">${dateStr}</span>
       </div>
       <div class="muted" style="margin-top:4px;">Topp: ${topPlayers || "–"}</div>
     `;
-    recentContainer.appendChild(div);
+    recentContainer.appendChild(a);
   }
 }
 

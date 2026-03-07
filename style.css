@@ -1,8 +1,10 @@
 /* ===== Base ===== */
 body {
   font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial;
-  margin: 12px;
+  margin: 0;
+  padding: 16px;
   background: #f5f5f5;
+  box-sizing: border-box;
 }
 .card {
   border: 1px solid #ddd;
@@ -10,6 +12,7 @@ body {
   padding: 16px;
   max-width: 640px;
   background: #fff;
+  margin: 0 auto;
 }
 
 /* ===== Typography ===== */
