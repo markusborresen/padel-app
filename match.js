@@ -182,6 +182,9 @@ function hydrate(data) {
   }
 
   if (STATUS === "completed") {
+    const statsUrl = MODE === "americano" ? "./americano-stats.html" : "./stats.html";
+    el("completedBanner").innerHTML =
+      `Kampen er avsluttet. <a href="${statsUrl}">Se statistikk →</a>`;
     el("completedBanner").style.display = "block";
     el("endSessionBtn").style.display = "none";
     el("extraRoundBtn").style.display = "none";
@@ -354,7 +357,7 @@ async function endSession() {
       updatedAt: serverTimestamp(),
     });
 
-    window.location.href = "./stats.html";
+    window.location.href = MODE === "americano" ? "./americano-stats.html" : "./stats.html";
   } catch (err) {
     console.error(err);
     alert("Noe gikk galt ved avslutning: " + (err?.message || err));

@@ -64,14 +64,23 @@ async function loadStats() {
     return tb - ta;
   });
 
+  // Filter: only classic sessions (no mode field = classic)
+  const classicEntries = entries.filter(({ data }) => !data.mode || data.mode === 'classic');
+
+  if (!classicEntries.length) {
+    el("emptyMsg").style.display = "block";
+    el("emptyMsg").textContent = "Ingen klassiske kamper avsluttet ennå.";
+    return;
+  }
+
   el("mainContent").style.display = "block";
   el("sessionCount").textContent =
-    `${entries.length} avsluttet kamp${entries.length === 1 ? "" : "er"} registrert`;
+    `${classicEntries.length} klassisk kamp${classicEntries.length === 1 ? "" : "er"} registrert`;
 
   /* ===== Aggregate leaderboard ===== */
   const playerStats = new Map(); // name -> { wins, matches }
 
-  for (const { data } of entries) {
+  for (const { data } of classicEntries) {
     const finalScores = data.finalScores || {};
     const totalMatches = data.totalMatches || {};
     for (const [player, wins] of Object.entries(finalScores)) {
@@ -106,7 +115,7 @@ async function loadStats() {
 
   /* ===== Recent matches (clickable) ===== */
   const recentContainer = el("recentSessions");
-  for (const { id, data } of entries.slice(0, 20)) {
+  for (const { id, data } of classicEntries.slice(0, 20)) {
     const finalScores = data.finalScores || {};
     const topPlayers = Object.entries(finalScores)
       .sort((a, b) => b[1] - a[1])

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Padelplan – Statistikk</title>
+  <title>Padelplan – Americano-statistikk</title>
   <link rel="stylesheet" href="./style.css" />
   <link rel="manifest" href="./manifest.json" />
   <meta name="theme-color" content="#16a34a" />
@@ -32,14 +32,14 @@
     <div id="statsContent" style="display:none;">
 
     <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:14px;">
-      <h1 style="margin:0;">Klassisk</h1>
+      <h1 style="margin:0;">Americano</h1>
       <a href="./index.html" class="btn">← Hjem</a>
     </div>
 
     <!-- Mode tabs -->
     <div class="row" style="margin-bottom:16px; gap:8px;">
-      <span class="btn primary" style="cursor:default;">Klassisk</span>
-      <a href="./americano-stats.html" class="btn">Americano</a>
+      <a href="./stats.html" class="btn">Klassisk</a>
+      <span class="btn primary" style="cursor:default;">Americano</span>
     </div>
 
     <div id="loadingMsg" class="muted">Laster statistikk…</div>
@@ -55,9 +55,9 @@
           <tr>
             <th>#</th>
             <th>Spiller</th>
-            <th>Seire</th>
-            <th>Kamper</th>
-            <th>Vinn%</th>
+            <th>Poeng</th>
+            <th>Runder</th>
+            <th>Snitt</th>
           </tr>
         </thead>
         <tbody id="leaderboardBody"></tbody>
@@ -70,17 +70,7 @@
     </div>
 
     <div id="emptyMsg" style="display:none;" class="muted">
-      Ingen avsluttede kamper ennå. Spill en kamp og avslutt den for å se statistikk her.
-    </div>
-
-    <!-- Shown if Firestore rules block the history collection -->
-    <div id="rulesNote" style="display:none; margin-top:12px; font-size:12px; color:#666; border:1px solid #eee; border-radius:8px; padding:10px;">
-      <b>Slik fikser du det:</b> Gå til
-      <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a>
-      → Firestore → Rules, og legg til tilgang for <code>history</code>:
-      <pre style="margin:6px 0; background:#f5f5f5; padding:6px; border-radius:4px; font-size:11px;">match /history/{doc} {
-  allow read, write: if request.auth != null;
-}</pre>
+      Ingen Americano-kamper avsluttet ennå. Velg Americano-modus når du oppretter en kamp.
     </div>
 
   </div><!-- /statsContent -->
@@ -121,6 +111,6 @@
       if (e.key === 'Enter') checkPin();
     });
   </script>
-  <script type="module" src="./stats.js"></script>
+  <script type="module" src="./americano-stats.js"></script>
 </body>
 </html>
