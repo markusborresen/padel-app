@@ -11,10 +11,52 @@
 
     <!-- HOME -->
     <div id="viewHome" class="view active">
-      <h1>Padelplan</h1>
-      <p class="muted" style="margin-bottom:14px;">
-        Lag et kampoppsett for padel med automatisk trekking og poengføring.
+
+      <!-- Logo -->
+      <div style="display:flex; align-items:center; gap:14px; margin-bottom:22px;">
+        <svg width="44" height="56" viewBox="0 0 44 56" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <!-- Racket face -->
+          <rect x="2" y="2" width="34" height="36" rx="13" fill="#16a34a"/>
+          <!-- Holes 3x3 -->
+          <circle cx="11" cy="12" r="2.8" fill="#fff" opacity="0.38"/>
+          <circle cx="21" cy="12" r="2.8" fill="#fff" opacity="0.38"/>
+          <circle cx="31" cy="12" r="2.8" fill="#fff" opacity="0.38"/>
+          <circle cx="11" cy="21" r="2.8" fill="#fff" opacity="0.38"/>
+          <circle cx="21" cy="21" r="2.8" fill="#fff" opacity="0.38"/>
+          <circle cx="31" cy="21" r="2.8" fill="#fff" opacity="0.38"/>
+          <circle cx="11" cy="30" r="2.8" fill="#fff" opacity="0.38"/>
+          <circle cx="21" cy="30" r="2.8" fill="#fff" opacity="0.38"/>
+          <circle cx="31" cy="30" r="2.8" fill="#fff" opacity="0.38"/>
+          <!-- Handle -->
+          <rect x="13" y="37" width="12" height="16" rx="6" fill="#15803d"/>
+          <!-- Ball -->
+          <circle cx="39" cy="47" r="6" fill="#a3e635"/>
+        </svg>
+        <div>
+          <h1 style="margin:0; font-size:26px; letter-spacing:-0.5px;">Padelplan</h1>
+          <p style="margin:2px 0 0; font-size:13px; color:#6b7280;">Kampoppsett for padel</p>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <p style="font-size:15px; color:#374151; margin:0 0 14px; line-height:1.6;">
+        Planlegg padel-kamper enkelt. Appen genererer automatisk et rettferdig kampoppsett, fordeler spillere på baner og holder styr på poeng og resultater.
       </p>
+      <div style="background:#f0fdf4; border-radius:14px; padding:14px 16px; margin-bottom:20px; display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#374151;">
+          <span style="display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:#16a34a; color:#fff; font-size:11px; font-weight:700; flex-shrink:0; margin-top:1px;">1</span>
+          <span><strong>Opprett sesjon</strong> — legg inn spillernavn og velg antall baner</span>
+        </div>
+        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#374151;">
+          <span style="display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:#16a34a; color:#fff; font-size:11px; font-weight:700; flex-shrink:0; margin-top:1px;">2</span>
+          <span><strong>Del PIN-koden</strong> — andre spillere kan følge og registrere kamper live</span>
+        </div>
+        <div style="display:flex; align-items:flex-start; gap:10px; font-size:13px; color:#374151;">
+          <span style="display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:#16a34a; color:#fff; font-size:11px; font-weight:700; flex-shrink:0; margin-top:1px;">3</span>
+          <span><strong>Se statistikk</strong> — leaderboard og historikk over alle avsluttede kamper</span>
+        </div>
+      </div>
+
       <div class="row">
         <button class="btn big primary" id="goCreateBtn">Opprett sesjon</button>
         <button class="btn big" id="goJoinBtn">Bli med</button>
