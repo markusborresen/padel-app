@@ -1,6 +1,7 @@
 import {
   db, firebaseReady, getDocIdFromPin, sessionRef, historyCol
 } from "./firebase.js";
+import { buildExtraRound } from "./scheduler.js";
 import {
   onSnapshot, runTransaction, updateDoc, addDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
@@ -11,11 +12,12 @@ let CURRENT_DOC_ID = null;
 let unsubscribe = null;
 
 let PLAYERS = [];
-let ROUNDS = [];       // [{ courts: [{a,b}, {a,b}] }, ...]
+let ROUNDS = [];
 let CURRENT_ROUND = 0;
 let WINNERS = {};
 let SCORES = {};
 let STATUS = "active";
+let CYCLE_LENGTH = 0; // rounds in one full cycle (initial schedule length)
 
 /* ===== DOM helpers ===== */
 const el = id => document.getElementById(id);
@@ -25,13 +27,16 @@ function renderRoundNav() {
   el("roundTitle").textContent = `Runde ${CURRENT_ROUND + 1} av ${ROUNDS.length}`;
   el("prevRoundBtn").disabled = CURRENT_ROUND <= 0 || STATUS === "completed";
   el("nextRoundBtn").disabled = CURRENT_ROUND >= ROUNDS.length - 1 || STATUS === "completed";
+
+  // Show "extra round" button only on last round and game is active
+  const onLastRound = CURRENT_ROUND === ROUNDS.length - 1;
+  el("extraRoundBtn").style.display = onLastRound && STATUS === "active" ? "block" : "none";
 }
 
 function renderCurrentRound() {
   const container = el("courtsContainer");
   container.innerHTML = "";
 
-  // Each round is { courts: [match, match, ...] }
   const courts = (ROUNDS[CURRENT_ROUND] || {}).courts || [];
   const activePlayers = new Set();
 
@@ -69,11 +74,8 @@ function renderCurrentRound() {
     container.appendChild(card);
   });
 
-  // Resting players
   const resting = PLAYERS.filter(p => !activePlayers.has(p));
-  el("restingLine").textContent = resting.length
-    ? `Hviler: ${resting.join(", ")}`
-    : "";
+  el("restingLine").textContent = resting.length ? `Hviler: ${resting.join(", ")}` : "";
 }
 
 function renderScores() {
@@ -90,6 +92,7 @@ function hydrate(data) {
   WINNERS = data.winners || {};
   SCORES = data.scores || {};
   STATUS = data.status || "active";
+  CYCLE_LENGTH = data.cycleLength || 0;
 
   el("loadingMsg").style.display = "none";
   el("mainContent").style.display = "block";
@@ -97,6 +100,7 @@ function hydrate(data) {
   if (STATUS === "completed") {
     el("completedBanner").style.display = "block";
     el("endSessionBtn").style.display = "none";
+    el("extraRoundBtn").style.display = "none";
   }
 
   renderRoundNav();
@@ -114,7 +118,6 @@ async function setWinner(roundIdx, courtIdx, newWinner) {
     if (!snap.exists()) return;
 
     const data = snap.data();
-    // rounds[i] is { courts: [...] }
     const match = ((data.rounds || [])[roundIdx]?.courts || [])[courtIdx];
     if (!match) return;
 
@@ -146,32 +149,83 @@ async function goToRound(idx) {
   });
 }
 
+/* ===== Extra round ===== */
+async function addExtraRound() {
+  if (!CURRENT_DOC_ID) return;
+  const courtsPerRound = ROUNDS[0]?.courts?.length || 1;
+  const newRound = buildExtraRound(PLAYERS, courtsPerRound, Date.now() >>> 0);
+  if (!newRound) return;
+
+  const newRounds = [...ROUNDS, newRound];
+  await updateDoc(sessionRef(CURRENT_DOC_ID), {
+    rounds: newRounds,
+    currentRound: newRounds.length - 1,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/* ===== End session (cycle-aware stats) ===== */
 async function endSession() {
   if (!CURRENT_DOC_ID) return;
-  if (!confirm("Avslutte sesjonen og lagre resultatet til statistikk?")) return;
 
-  // Compute totalMatches per player across all rounds
+  // Count consecutive complete rounds from the beginning
+  let completedRoundCount = 0;
+  for (let i = 0; i < ROUNDS.length; i++) {
+    const courts = ROUNDS[i].courts || [];
+    const roundDone = courts.length > 0 && courts.every((_, ci) => WINNERS[`${i}:${ci}`]);
+    if (roundDone) completedRoundCount++;
+    else break;
+  }
+
+  const cycleLen = CYCLE_LENGTH || ROUNDS.length;
+  const completedCycles = Math.floor(completedRoundCount / cycleLen);
+  const validRounds = completedCycles * cycleLen;
+
+  // Build confirm message
+  const cycleWord = completedCycles === 1 ? "hel runde" : "hele runder";
+  let msg = `Avslutte kampen?\n\n${completedRoundCount} av ${ROUNDS.length} runder fullført · ${completedCycles} ${cycleWord} à ${cycleLen} runder.`;
+  if (validRounds === 0) {
+    msg += "\n\nIngen fullstendige runder – ingen statistikk vil bli lagret.";
+  } else {
+    msg += `\nStatistikk telles fra runde 1–${validRounds}.`;
+  }
+
+  if (!confirm(msg)) return;
+
+  // Only keep winners from complete cycles
+  const validWinners = {};
+  for (const [key, val] of Object.entries(WINNERS)) {
+    if (parseInt(key.split(':')[0], 10) < validRounds) validWinners[key] = val;
+  }
+
+  // Recompute scores and totalMatches from valid rounds only
+  const finalScores = {};
   const totalMatches = {};
-  for (const p of PLAYERS) totalMatches[p] = 0;
-  for (const round of ROUNDS) {
-    for (const match of (round.courts || [])) {
-      for (const p of [...match.a, ...match.b]) {
-        totalMatches[p] = (totalMatches[p] || 0) + 1;
-      }
+  for (const p of PLAYERS) { finalScores[p] = 0; totalMatches[p] = 0; }
+
+  for (let i = 0; i < validRounds; i++) {
+    for (let ci = 0; ci < (ROUNDS[i]?.courts || []).length; ci++) {
+      const match = ROUNDS[i].courts[ci];
+      for (const p of [...match.a, ...match.b]) totalMatches[p] = (totalMatches[p] || 0) + 1;
+      const winner = validWinners[`${i}:${ci}`];
+      if (winner === "A") { finalScores[match.a[0]]++; finalScores[match.a[1]]++; }
+      if (winner === "B") { finalScores[match.b[0]]++; finalScores[match.b[1]]++; }
     }
   }
 
   try {
-    await addDoc(historyCol(), {
-      pin: CURRENT_PIN,
-      players: PLAYERS,
-      numCourts: ROUNDS[0]?.courts?.length || 1,
-      rounds: ROUNDS,
-      winners: WINNERS,
-      finalScores: { ...SCORES },
-      totalMatches,
-      completedAt: serverTimestamp(),
-    });
+    if (validRounds > 0) {
+      await addDoc(historyCol(), {
+        pin: CURRENT_PIN,
+        players: PLAYERS,
+        numCourts: ROUNDS[0]?.courts?.length || 1,
+        rounds: ROUNDS.slice(0, validRounds),
+        winners: validWinners,
+        finalScores,
+        totalMatches,
+        completedAt: serverTimestamp(),
+      });
+    }
 
     await updateDoc(sessionRef(CURRENT_DOC_ID), {
       status: "completed",
@@ -231,11 +285,10 @@ async function init() {
 
 /* ===== Event wiring ===== */
 window.addEventListener("load", () => {
-  // Winner radio buttons (delegated)
   document.addEventListener("change", async (e) => {
     const input = e.target;
     if (!input?.name?.startsWith("w_")) return;
-    const parts = input.name.split("_"); // ["w", roundIdx, courtIdx]
+    const parts = input.name.split("_");
     const roundIdx = parseInt(parts[1], 10);
     const courtIdx = parseInt(parts[2], 10);
     if (!Number.isFinite(roundIdx) || !Number.isFinite(courtIdx)) return;
@@ -255,6 +308,13 @@ window.addEventListener("load", () => {
       try { await goToRound(CURRENT_ROUND + 1); }
       catch (err) { console.error(err); }
     }
+  });
+
+  el("extraRoundBtn").addEventListener("click", async () => {
+    el("extraRoundBtn").disabled = true;
+    try { await addExtraRound(); }
+    catch (err) { console.error(err); alert("Klarte ikke å legge til runde: " + (err?.message || err)); }
+    finally { el("extraRoundBtn").disabled = false; }
   });
 
   el("copyPinBtn").addEventListener("click", async () => {

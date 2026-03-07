@@ -212,6 +212,40 @@ textarea:focus { border-color: #16a34a; }
   margin-bottom: 12px;
 }
 
+/* ===== Create: player input cells ===== */
+.player-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.player-num {
+  font-size: 12px;
+  color: #9ca3af;
+  width: 20px;
+  text-align: right;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+.player-cell input[type="text"] {
+  flex: 1;
+  min-width: 0;
+}
+.player-remove {
+  background: none;
+  border: none;
+  color: #d1d5db;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 6px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  transition: color 0.15s;
+}
+.player-remove:hover:not(:disabled) { color: #ef4444; }
+.player-remove:disabled { opacity: 0; cursor: default; pointer-events: none; }
+
 /* ===== Responsive ===== */
 @media (max-width: 520px) {
   body { padding: 12px; }

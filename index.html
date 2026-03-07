@@ -64,7 +64,7 @@
       </div>
 
       <div class="row">
-        <button class="btn big primary" id="goCreateBtn">Opprett sesjon</button>
+        <button class="btn big primary" id="goCreateBtn">Opprett kamp</button>
         <button class="btn big" id="goJoinBtn">Bli med</button>
         <a href="./stats.html" class="btn big">Statistikk</a>
       </div>
@@ -72,14 +72,20 @@
 
     <!-- CREATE -->
     <div id="viewCreate" class="view">
-      <h1>Opprett sesjon</h1>
+      <h1>Opprett kamp</h1>
 
-      <div style="margin-top:12px;">
-        <label for="createPlayers">Spillere (én per linje, minimum 4)</label>
-        <textarea id="createPlayers" placeholder="Markus&#10;Partap&#10;Jonas&#10;Erik&#10;..."></textarea>
+      <!-- Player cells -->
+      <div style="margin-top:14px;">
+        <div class="row" style="align-items:baseline; justify-content:space-between; margin-bottom:10px;">
+          <label style="margin:0;">Spillere</label>
+          <span id="playerCount" style="font-size:15px; color:#16a34a; font-weight:700;"></span>
+        </div>
+        <div id="playerInputs"></div>
+        <button type="button" class="btn" id="addPlayerBtn" style="margin-top:8px; font-size:13px; padding:8px 14px;">+ Legg til spiller</button>
       </div>
 
-      <div style="margin-top:10px;">
+      <!-- Courts -->
+      <div style="margin-top:14px;">
         <label for="createCourts">Antall baner</label>
         <select id="createCourts">
           <option value="1">1 bane</option>
@@ -91,7 +97,10 @@
         </select>
       </div>
 
-      <p class="muted" style="margin-top:8px;">
+      <!-- Match info -->
+      <div id="matchInfo" style="margin-top:12px; background:#f0fdf4; border-radius:12px; padding:10px 14px; font-size:13px; color:#166534; display:none;"></div>
+
+      <p class="muted" style="margin-top:10px;">
         PIN genereres automatisk. Del den med de andre spillerne slik at de kan bli med.
       </p>
 

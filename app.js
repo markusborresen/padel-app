@@ -13,20 +13,88 @@ function showView(name) {
   }
 }
 
-/* ===== Helpers ===== */
-function parsePlayers(text) {
-  const raw = text.split(/\r?\n|,/g).map(s => s.trim()).filter(Boolean);
+/* ===== Player cells ===== */
+function getPlayerNames() {
+  const names = [];
   const seen = new Set();
-  const out = [];
-  for (const name of raw) {
+  for (const input of document.querySelectorAll('#playerInputs .player-input')) {
+    const name = input.value.trim();
+    if (!name) continue;
     const key = name.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push(name);
+    names.push(name);
   }
-  return out;
+  return names;
 }
 
+function updateMatchInfo() {
+  const cellCount = document.querySelectorAll('#playerInputs .player-cell').length;
+  const courts = parseInt(document.getElementById('createCourts').value, 10);
+  const infoEl = document.getElementById('matchInfo');
+
+  if (cellCount < 4) { infoEl.style.display = 'none'; return; }
+
+  const N = cellCount;
+  const courtsPerRound = Math.min(courts, Math.floor(N / 4));
+  const numRounds = Math.min(Math.max(Math.ceil(N * (N - 1) / (4 * courtsPerRound)), 4), 20);
+  const matchesPerPlayer = Math.round(numRounds * 4 * courtsPerRound / N);
+
+  infoEl.style.display = 'block';
+  infoEl.textContent = `${numRounds} runder · ca. ${matchesPerPlayer} kamper per spiller`;
+}
+
+function updatePlayerCount() {
+  const cells = document.querySelectorAll('#playerInputs .player-cell');
+  const n = cells.length;
+  document.getElementById('playerCount').textContent = `${n} spillere`;
+
+  // Enable/disable remove buttons (minimum 4)
+  document.querySelectorAll('#playerInputs .player-remove')
+    .forEach(btn => { btn.disabled = n <= 4; });
+
+  updateMatchInfo();
+}
+
+function renumberCells() {
+  document.querySelectorAll('#playerInputs .player-num')
+    .forEach((el, i) => { el.textContent = i + 1; });
+  document.querySelectorAll('#playerInputs .player-input')
+    .forEach((el, i) => { if (!el.value) el.placeholder = `Spiller ${i + 1}`; });
+}
+
+function addPlayerCell(name = '') {
+  const container = document.getElementById('playerInputs');
+  const num = container.querySelectorAll('.player-cell').length + 1;
+
+  const div = document.createElement('div');
+  div.className = 'player-cell';
+  div.innerHTML = `
+    <span class="player-num">${num}</span>
+    <input type="text" class="player-input" placeholder="Spiller ${num}"
+           autocomplete="off" />
+    <button type="button" class="player-remove" title="Fjern spiller" disabled>×</button>
+  `;
+
+  if (name) div.querySelector('.player-input').value = name;
+
+  div.querySelector('.player-remove').addEventListener('click', () => {
+    div.remove();
+    renumberCells();
+    updatePlayerCount();
+  });
+  div.querySelector('.player-input').addEventListener('input', updateMatchInfo);
+
+  container.appendChild(div);
+  updatePlayerCount();
+  return div;
+}
+
+function initPlayerCells() {
+  for (let i = 0; i < 4; i++) addPlayerCell();
+}
+
+/* ===== Helpers ===== */
 function initScores(players) {
   const o = {};
   for (const p of players) o[p] = 0;
@@ -34,12 +102,12 @@ function initScores(players) {
 }
 
 /* ===== Create session ===== */
-async function createSession(playersText, numCourts) {
+async function createSession(numCourts) {
   await firebaseReady;
 
-  const players = parsePlayers(playersText);
+  const players = getPlayerNames();
   if (players.length < 4) {
-    alert("Du trenger minst 4 spillere.");
+    alert("Du trenger minst 4 spillere med navn.");
     return;
   }
 
@@ -53,6 +121,8 @@ async function createSession(playersText, numCourts) {
     showView("viewCreate");
     return;
   }
+
+  const cycleLength = rounds.length; // one full cycle = initial schedule length
 
   for (let attempt = 0; attempt < 10; attempt++) {
     const pin = generatePin6();
@@ -69,6 +139,7 @@ async function createSession(playersText, numCourts) {
           players,
           numCourts,
           rounds,
+          cycleLength,
           currentRound: 0,
           winners: {},
           scores: initScores(players),
@@ -95,15 +166,27 @@ async function createSession(playersText, numCourts) {
 
 /* ===== Wiring ===== */
 window.addEventListener("load", () => {
-  document.getElementById("goCreateBtn").addEventListener("click", () => showView("viewCreate"));
+  initPlayerCells();
+
+  document.getElementById("goCreateBtn").addEventListener("click", () => {
+    showView("viewCreate");
+    updateMatchInfo();
+  });
   document.getElementById("goJoinBtn").addEventListener("click", () => showView("viewJoin"));
   document.getElementById("createBackBtn").addEventListener("click", () => showView("viewHome"));
   document.getElementById("joinBackBtn").addEventListener("click", () => showView("viewHome"));
 
+  document.getElementById("addPlayerBtn").addEventListener("click", () => {
+    addPlayerCell();
+    const inputs = document.querySelectorAll('#playerInputs .player-input');
+    inputs[inputs.length - 1]?.focus();
+  });
+
+  document.getElementById("createCourts").addEventListener("change", updateMatchInfo);
+
   document.getElementById("createStartBtn").addEventListener("click", async () => {
-    const text = document.getElementById("createPlayers").value;
     const courts = parseInt(document.getElementById("createCourts").value, 10);
-    await createSession(text, courts);
+    await createSession(courts);
   });
 
   document.getElementById("joinStartBtn").addEventListener("click", () => {

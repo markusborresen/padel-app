@@ -26,11 +26,11 @@
 
     <!-- Completed banner (hidden by default) -->
     <div id="completedBanner" class="banner" style="display:none;">
-      Sesjonen er avsluttet. <a href="./stats.html">Se statistikk →</a>
+      Kampen er avsluttet. <a href="./stats.html">Se statistikk →</a>
     </div>
 
     <!-- Loading state -->
-    <div id="loadingMsg" class="muted">Laster sesjon…</div>
+    <div id="loadingMsg" class="muted">Laster kamp…</div>
 
     <!-- Main content (hidden until loaded) -->
     <div id="mainContent" style="display:none;">
@@ -52,9 +52,14 @@
       <h2>Poeng</h2>
       <div id="scores" class="scoregrid"></div>
 
+      <!-- Extra round (shown only on last round) -->
+      <button class="btn primary" id="extraRoundBtn" style="display:none; margin-top:14px; width:100%;">
+        + Spill en runde til
+      </button>
+
       <!-- Actions -->
-      <div class="row" style="margin-top:16px; justify-content:space-between;">
-        <button class="btn danger" id="endSessionBtn">Avslutt sesjon</button>
+      <div class="row" style="margin-top:12px; justify-content:space-between;">
+        <button class="btn danger" id="endSessionBtn">Avslutt kamp</button>
         <button class="btn" id="leaveBtn">Forlat</button>
       </div>
 

@@ -176,3 +176,13 @@ export function buildSchedule(players, numCourts, seed) {
   // Wrap each round as { courts: [...] } — Firestore does not support nested arrays
   return { rounds: best.map(courts => ({ courts })) };
 }
+
+/* ===== Generate one extra round ===== */
+export function buildExtraRound(players, courtsPerRound, seed) {
+  const N = players.length;
+  if (N < 4) return null;
+  const rng = mulberry32(seed >>> 0);
+  const candidates = generateCandidateMatches(players);
+  const courts = buildRandomRound(candidates, courtsPerRound, rng);
+  return { courts };
+}
