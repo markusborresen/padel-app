@@ -17,10 +17,24 @@ let CURRENT_ROUND = 0;
 let WINNERS = {};
 let SCORES = {};
 let STATUS = "active";
-let CYCLE_LENGTH = 0; // rounds in one full cycle (initial schedule length)
+let CYCLE_LENGTH = 0;
+let MODE = "classic";         // "classic" | "americano"
+let POINTS_PER_ROUND = 32;    // only used in americano mode
 
 /* ===== DOM helpers ===== */
 const el = id => document.getElementById(id);
+
+/* ===== Round complete check ===== */
+function isRoundComplete(roundIdx) {
+  const courts = ROUNDS[roundIdx]?.courts || [];
+  if (!courts.length) return false;
+  return courts.every((_, ci) => {
+    const w = WINNERS[`${roundIdx}:${ci}`];
+    if (!w) return false;
+    if (MODE === "americano") return typeof w === "object" && (w.a + w.b) === POINTS_PER_ROUND;
+    return w === "A" || w === "B";
+  });
+}
 
 /* ===== Rendering ===== */
 function renderRoundNav() {
@@ -28,7 +42,6 @@ function renderRoundNav() {
   el("prevRoundBtn").disabled = CURRENT_ROUND <= 0 || STATUS === "completed";
   el("nextRoundBtn").disabled = CURRENT_ROUND >= ROUNDS.length - 1 || STATUS === "completed";
 
-  // Show "extra round" button only on last round and game is active
   const onLastRound = CURRENT_ROUND === ROUNDS.length - 1;
   el("extraRoundBtn").style.display = onLastRound && STATUS === "active" ? "block" : "none";
 }
@@ -45,32 +58,90 @@ function renderCurrentRound() {
     activePlayers.add(match.b[0]); activePlayers.add(match.b[1]);
 
     const winnerKey = `${CURRENT_ROUND}:${courtIdx}`;
-    const currentWinner = WINNERS[winnerKey] || null;
-
-    const idA = `w_${CURRENT_ROUND}_${courtIdx}_A`;
-    const idB = `w_${CURRENT_ROUND}_${courtIdx}_B`;
-    const name = `w_${CURRENT_ROUND}_${courtIdx}`;
-
     const card = document.createElement("div");
     card.className = "court-card";
-    card.innerHTML = `
-      <div class="court-label">Bane ${courtIdx + 1}</div>
-      <div class="teams">
-        <span class="team">${match.a[0]} &amp; ${match.a[1]}</span>
-        <span class="vs">vs</span>
-        <span class="team">${match.b[0]} &amp; ${match.b[1]}</span>
-      </div>
-      <div class="winseg" role="group" aria-label="Vinner bane ${courtIdx + 1}">
-        <input class="winradio" type="radio" name="${name}" id="${idA}" value="A"
-          ${currentWinner === "A" ? "checked" : ""}
-          ${STATUS === "completed" ? "disabled" : ""}>
-        <label class="winbtn" for="${idA}">A</label>
-        <input class="winradio" type="radio" name="${name}" id="${idB}" value="B"
-          ${currentWinner === "B" ? "checked" : ""}
-          ${STATUS === "completed" ? "disabled" : ""}>
-        <label class="winbtn" for="${idB}">B</label>
-      </div>
-    `;
+
+    if (MODE === "americano") {
+      // ===== Americano: score entry =====
+      const saved = WINNERS[winnerKey]; // {a, b} or undefined
+      const aVal = saved?.a ?? "";
+      const bVal = saved?.b ?? "";
+      const validClass = saved ? " am-valid" : "";
+      const disabled = STATUS === "completed" ? "disabled" : "";
+
+      card.innerHTML = `
+        <div class="court-label">Bane ${courtIdx + 1}</div>
+        <div class="teams">
+          <span class="team">${match.a[0]} &amp; ${match.a[1]}</span>
+          <span class="vs">vs</span>
+          <span class="team">${match.b[0]} &amp; ${match.b[1]}</span>
+        </div>
+        <div class="americano-row">
+          <input type="number" class="americano-input${validClass}"
+                 id="am_a_${CURRENT_ROUND}_${courtIdx}"
+                 min="0" max="${POINTS_PER_ROUND}" value="${aVal}" placeholder="–" ${disabled} />
+          <span class="americano-sep">–</span>
+          <input type="number" class="americano-input${validClass}"
+                 id="am_b_${CURRENT_ROUND}_${courtIdx}"
+                 min="0" max="${POINTS_PER_ROUND}" value="${bVal}" placeholder="–" ${disabled} />
+          <span class="americano-total">av ${POINTS_PER_ROUND}</span>
+        </div>
+      `;
+
+      if (STATUS !== "completed") {
+        const aInput = card.querySelector(`#am_a_${CURRENT_ROUND}_${courtIdx}`);
+        const bInput = card.querySelector(`#am_b_${CURRENT_ROUND}_${courtIdx}`);
+        const ri = CURRENT_ROUND, ci = courtIdx;
+
+        // Sync fields in real time
+        aInput.addEventListener("input", () => {
+          const a = parseInt(aInput.value, 10);
+          if (!isNaN(a) && a >= 0 && a <= POINTS_PER_ROUND) bInput.value = POINTS_PER_ROUND - a;
+        });
+        bInput.addEventListener("input", () => {
+          const b = parseInt(bInput.value, 10);
+          if (!isNaN(b) && b >= 0 && b <= POINTS_PER_ROUND) aInput.value = POINTS_PER_ROUND - b;
+        });
+
+        // Save when leaving a field (both values must be valid)
+        const trySave = async () => {
+          const a = parseInt(aInput.value, 10);
+          const b = parseInt(bInput.value, 10);
+          if (isNaN(a) || isNaN(b) || a < 0 || b < 0 || a + b !== POINTS_PER_ROUND) return;
+          try { await setAmericanoScore(ri, ci, a, b); }
+          catch (err) { console.error(err); }
+        };
+        aInput.addEventListener("change", trySave);
+        bInput.addEventListener("change", trySave);
+      }
+
+    } else {
+      // ===== Classic: win/loss radio buttons =====
+      const currentWinner = WINNERS[winnerKey] || null;
+      const idA = `w_${CURRENT_ROUND}_${courtIdx}_A`;
+      const idB = `w_${CURRENT_ROUND}_${courtIdx}_B`;
+      const name = `w_${CURRENT_ROUND}_${courtIdx}`;
+
+      card.innerHTML = `
+        <div class="court-label">Bane ${courtIdx + 1}</div>
+        <div class="teams">
+          <span class="team">${match.a[0]} &amp; ${match.a[1]}</span>
+          <span class="vs">vs</span>
+          <span class="team">${match.b[0]} &amp; ${match.b[1]}</span>
+        </div>
+        <div class="winseg" role="group" aria-label="Vinner bane ${courtIdx + 1}">
+          <input class="winradio" type="radio" name="${name}" id="${idA}" value="A"
+            ${currentWinner === "A" ? "checked" : ""}
+            ${STATUS === "completed" ? "disabled" : ""}>
+          <label class="winbtn" for="${idA}">A</label>
+          <input class="winradio" type="radio" name="${name}" id="${idB}" value="B"
+            ${currentWinner === "B" ? "checked" : ""}
+            ${STATUS === "completed" ? "disabled" : ""}>
+          <label class="winbtn" for="${idB}">B</label>
+        </div>
+      `;
+    }
+
     container.appendChild(card);
   });
 
@@ -80,9 +151,13 @@ function renderCurrentRound() {
 
 function renderScores() {
   const entries = Object.entries(SCORES).sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]));
+  const label = MODE === "americano" ? "poeng" : "seire";
   el("scores").innerHTML = entries
     .map(([p, pts]) => `<div class="score-row"><span class="pill">${pts}</span>${p}</div>`)
     .join("");
+  // Update heading
+  const h2 = el("scoresHeading");
+  if (h2) h2.textContent = MODE === "americano" ? "Poeng" : "Poeng";
 }
 
 function hydrate(data) {
@@ -93,9 +168,18 @@ function hydrate(data) {
   SCORES = data.scores || {};
   STATUS = data.status || "active";
   CYCLE_LENGTH = data.cycleLength || 0;
+  MODE = data.mode || "classic";
+  POINTS_PER_ROUND = data.pointsPerRound || 32;
 
   el("loadingMsg").style.display = "none";
   el("mainContent").style.display = "block";
+
+  // Show mode badge
+  const badge = el("modeBadge");
+  if (badge) {
+    badge.textContent = MODE === "americano" ? `Americano · ${POINTS_PER_ROUND}p` : "Klassisk";
+    badge.style.display = "inline-block";
+  }
 
   if (STATUS === "completed") {
     el("completedBanner").style.display = "block";
@@ -108,7 +192,7 @@ function hydrate(data) {
   renderScores();
 }
 
-/* ===== Firestore ops ===== */
+/* ===== Classic: set winner ===== */
 async function setWinner(roundIdx, courtIdx, newWinner) {
   if (!CURRENT_DOC_ID) return;
 
@@ -141,6 +225,39 @@ async function setWinner(roundIdx, courtIdx, newWinner) {
   });
 }
 
+/* ===== Americano: set scores ===== */
+async function setAmericanoScore(roundIdx, courtIdx, aScore, bScore) {
+  if (!CURRENT_DOC_ID) return;
+
+  await runTransaction(db, async (tx) => {
+    const ref = sessionRef(CURRENT_DOC_ID);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return;
+
+    const data = snap.data();
+    const match = ((data.rounds || [])[roundIdx]?.courts || [])[courtIdx];
+    if (!match) return;
+
+    const winners = { ...(data.winners || {}) };
+    const scores = { ...(data.scores || {}) };
+    const key = `${roundIdx}:${courtIdx}`;
+    const prev = winners[key]; // {a, b} or undefined
+
+    // Undo previous
+    if (prev && typeof prev === "object") {
+      for (const p of match.a) scores[p] = (scores[p] || 0) - prev.a;
+      for (const p of match.b) scores[p] = (scores[p] || 0) - prev.b;
+    }
+
+    // Apply new
+    for (const p of match.a) scores[p] = (scores[p] || 0) + aScore;
+    for (const p of match.b) scores[p] = (scores[p] || 0) + bScore;
+
+    winners[key] = { a: aScore, b: bScore };
+    tx.update(ref, { winners, scores, updatedAt: serverTimestamp() });
+  });
+}
+
 async function goToRound(idx) {
   if (!CURRENT_DOC_ID) return;
   await updateDoc(sessionRef(CURRENT_DOC_ID), {
@@ -164,16 +281,14 @@ async function addExtraRound() {
   });
 }
 
-/* ===== End session (cycle-aware stats) ===== */
+/* ===== End session (cycle-aware, mode-aware) ===== */
 async function endSession() {
   if (!CURRENT_DOC_ID) return;
 
-  // Count consecutive complete rounds from the beginning
+  // Count consecutive complete rounds
   let completedRoundCount = 0;
   for (let i = 0; i < ROUNDS.length; i++) {
-    const courts = ROUNDS[i].courts || [];
-    const roundDone = courts.length > 0 && courts.every((_, ci) => WINNERS[`${i}:${ci}`]);
-    if (roundDone) completedRoundCount++;
+    if (isRoundComplete(i)) completedRoundCount++;
     else break;
   }
 
@@ -181,7 +296,6 @@ async function endSession() {
   const completedCycles = Math.floor(completedRoundCount / cycleLen);
   const validRounds = completedCycles * cycleLen;
 
-  // Build confirm message
   const cycleWord = completedCycles === 1 ? "hel runde" : "hele runder";
   let msg = `Avslutte kampen?\n\n${completedRoundCount} av ${ROUNDS.length} runder fullført · ${completedCycles} ${cycleWord} à ${cycleLen} runder.`;
   if (validRounds === 0) {
@@ -192,13 +306,13 @@ async function endSession() {
 
   if (!confirm(msg)) return;
 
-  // Only keep winners from complete cycles
+  // Filter winners to valid rounds only
   const validWinners = {};
   for (const [key, val] of Object.entries(WINNERS)) {
-    if (parseInt(key.split(':')[0], 10) < validRounds) validWinners[key] = val;
+    if (parseInt(key.split(":")[0], 10) < validRounds) validWinners[key] = val;
   }
 
-  // Recompute scores and totalMatches from valid rounds only
+  // Recompute scores from valid rounds
   const finalScores = {};
   const totalMatches = {};
   for (const p of PLAYERS) { finalScores[p] = 0; totalMatches[p] = 0; }
@@ -207,9 +321,15 @@ async function endSession() {
     for (let ci = 0; ci < (ROUNDS[i]?.courts || []).length; ci++) {
       const match = ROUNDS[i].courts[ci];
       for (const p of [...match.a, ...match.b]) totalMatches[p] = (totalMatches[p] || 0) + 1;
-      const winner = validWinners[`${i}:${ci}`];
-      if (winner === "A") { finalScores[match.a[0]]++; finalScores[match.a[1]]++; }
-      if (winner === "B") { finalScores[match.b[0]]++; finalScores[match.b[1]]++; }
+
+      const w = validWinners[`${i}:${ci}`];
+      if (MODE === "americano" && w && typeof w === "object") {
+        for (const p of match.a) finalScores[p] = (finalScores[p] || 0) + w.a;
+        for (const p of match.b) finalScores[p] = (finalScores[p] || 0) + w.b;
+      } else if (MODE === "classic") {
+        if (w === "A") { finalScores[match.a[0]]++; finalScores[match.a[1]]++; }
+        if (w === "B") { finalScores[match.b[0]]++; finalScores[match.b[1]]++; }
+      }
     }
   }
 
@@ -223,6 +343,8 @@ async function endSession() {
         winners: validWinners,
         finalScores,
         totalMatches,
+        mode: MODE,
+        pointsPerRound: POINTS_PER_ROUND,
         completedAt: serverTimestamp(),
       });
     }
@@ -285,6 +407,7 @@ async function init() {
 
 /* ===== Event wiring ===== */
 window.addEventListener("load", () => {
+  // Classic winner radio buttons (delegated)
   document.addEventListener("change", async (e) => {
     const input = e.target;
     if (!input?.name?.startsWith("w_")) return;

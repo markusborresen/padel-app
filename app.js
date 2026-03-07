@@ -28,9 +28,20 @@ function getPlayerNames() {
   return names;
 }
 
+function updateServesInfo() {
+  const pts = parseInt(document.getElementById('pointsPerRound').value, 10);
+  const el = document.getElementById('servesInfo');
+  if (!pts || pts < 1) { el.textContent = ''; return; }
+  const serves = pts / 4;
+  el.textContent = Number.isInteger(serves)
+    ? `= ${serves} server per spiller`
+    : `(ikke delelig med 4 – ulike server per spiller)`;
+}
+
 function updateMatchInfo() {
   const cellCount = document.querySelectorAll('#playerInputs .player-cell').length;
   const courts = parseInt(document.getElementById('createCourts').value, 10);
+  const mode = document.getElementById('gameMode').value;
   const infoEl = document.getElementById('matchInfo');
 
   if (cellCount < 4) { infoEl.style.display = 'none'; return; }
@@ -38,10 +49,19 @@ function updateMatchInfo() {
   const N = cellCount;
   const courtsPerRound = Math.min(courts, Math.floor(N / 4));
   const numRounds = Math.min(Math.max(Math.ceil(N * (N - 1) / (4 * courtsPerRound)), 4), 20);
-  const matchesPerPlayer = Math.round(numRounds * 4 * courtsPerRound / N);
+
+  let text = `${numRounds} runder`;
+  if (mode === 'americano') {
+    const pts = parseInt(document.getElementById('pointsPerRound').value, 10) || 32;
+    const serves = pts / 4;
+    text += ` · ${pts} poeng per runde · ${Number.isInteger(serves) ? serves : '~' + serves.toFixed(1)} server per spiller`;
+  } else {
+    const matchesPerPlayer = Math.round(numRounds * 4 * courtsPerRound / N);
+    text += ` · ca. ${matchesPerPlayer} kamper per spiller`;
+  }
 
   infoEl.style.display = 'block';
-  infoEl.textContent = `${numRounds} runder · ca. ${matchesPerPlayer} kamper per spiller`;
+  infoEl.textContent = text;
 }
 
 function updatePlayerCount() {
@@ -122,7 +142,11 @@ async function createSession(numCourts) {
     return;
   }
 
-  const cycleLength = rounds.length; // one full cycle = initial schedule length
+  const cycleLength = rounds.length;
+  const mode = document.getElementById('gameMode').value;
+  const pointsPerRound = mode === 'americano'
+    ? (parseInt(document.getElementById('pointsPerRound').value, 10) || 32)
+    : 0;
 
   for (let attempt = 0; attempt < 10; attempt++) {
     const pin = generatePin6();
@@ -140,6 +164,8 @@ async function createSession(numCourts) {
           numCourts,
           rounds,
           cycleLength,
+          mode,
+          pointsPerRound,
           currentRound: 0,
           winners: {},
           scores: initScores(players),
@@ -183,6 +209,18 @@ window.addEventListener("load", () => {
   });
 
   document.getElementById("createCourts").addEventListener("change", updateMatchInfo);
+
+  document.getElementById("gameMode").addEventListener("change", () => {
+    const isAmericano = document.getElementById('gameMode').value === 'americano';
+    document.getElementById('americanoOptions').style.display = isAmericano ? 'block' : 'none';
+    updateServesInfo();
+    updateMatchInfo();
+  });
+
+  document.getElementById("pointsPerRound").addEventListener("input", () => {
+    updateServesInfo();
+    updateMatchInfo();
+  });
 
   document.getElementById("createStartBtn").addEventListener("click", async () => {
     const courts = parseInt(document.getElementById("createCourts").value, 10);

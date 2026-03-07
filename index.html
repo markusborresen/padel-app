@@ -97,6 +97,25 @@
         </select>
       </div>
 
+      <!-- Game mode -->
+      <div style="margin-top:14px;">
+        <label for="gameMode">Spillemodus</label>
+        <select id="gameMode">
+          <option value="classic">Klassisk — vinn kampen</option>
+          <option value="americano">Americano — poeng per ball</option>
+        </select>
+      </div>
+
+      <!-- Americano: points per round (hidden by default) -->
+      <div id="americanoOptions" style="display:none; margin-top:12px;">
+        <label for="pointsPerRound">Poeng per runde</label>
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px;">
+          <input type="number" id="pointsPerRound" min="4" step="4" value="32"
+                 style="width:90px; text-align:center; font-size:16px; font-weight:600;" />
+          <span id="servesInfo" class="muted"></span>
+        </div>
+      </div>
+
       <!-- Match info -->
       <div id="matchInfo" style="margin-top:12px; background:#f0fdf4; border-radius:12px; padding:10px 14px; font-size:13px; color:#166534; display:none;"></div>
 
