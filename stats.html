@@ -15,6 +15,22 @@
 <body>
   <div class="card">
 
+    <!-- PIN gate -->
+    <div id="pinGate">
+      <h1 style="margin:0 0 6px;">Statistikk</h1>
+      <p class="muted" style="margin:0 0 20px;">Skriv inn PIN for å se statistikk.</p>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <input id="pinInput" type="password" inputmode="numeric" maxlength="8"
+               placeholder="PIN" style="width:120px; font-size:20px; letter-spacing:4px; text-align:center;" />
+        <button class="btn primary" id="pinSubmit">Åpne</button>
+        <a href="./index.html" class="btn">← Hjem</a>
+      </div>
+      <p id="pinError" style="display:none; color:#dc2626; font-size:13px; margin-top:10px;">Feil PIN. Prøv igjen.</p>
+    </div>
+
+    <!-- Stats content (hidden until PIN verified) -->
+    <div id="statsContent" style="display:none;">
+
     <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:14px;">
       <h1 style="margin:0;">Statistikk</h1>
       <a href="./index.html" class="btn">← Hjem</a>
@@ -61,8 +77,44 @@
 }</pre>
     </div>
 
-  </div>
+  </div><!-- /statsContent -->
+  </div><!-- /card -->
 
+  <script>
+    const HASH = '65f031743ee9226f6e13e4ae0478a9a227c6444839f6280f32cf6468bec54bef';
+
+    async function sha256(str) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function unlock() {
+      document.getElementById('pinGate').style.display = 'none';
+      document.getElementById('statsContent').style.display = 'block';
+    }
+
+    async function checkPin() {
+      const pin = document.getElementById('pinInput').value.trim();
+      const hash = await sha256('padelstats|' + pin);
+      if (hash === HASH) {
+        sessionStorage.setItem('statsAuth', '1');
+        unlock();
+      } else {
+        document.getElementById('pinError').style.display = 'block';
+        document.getElementById('pinInput').value = '';
+        document.getElementById('pinInput').focus();
+      }
+    }
+
+    if (sessionStorage.getItem('statsAuth') === '1') {
+      unlock();
+    }
+
+    document.getElementById('pinSubmit').addEventListener('click', checkPin);
+    document.getElementById('pinInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') checkPin();
+    });
+  </script>
   <script type="module" src="./stats.js"></script>
 </body>
 </html>
