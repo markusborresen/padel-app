@@ -62,12 +62,26 @@ function renderCurrentRound() {
     card.className = "court-card";
 
     if (MODE === "americano") {
-      // ===== Americano: score entry =====
+      // ===== Americano: velg vinner → skriv inn poeng =====
       const saved = WINNERS[winnerKey]; // {a, b} or undefined
-      const aVal = saved?.a ?? "";
-      const bVal = saved?.b ?? "";
+
+      let initWinner = null;
+      let initPts    = "";
+      if (saved && typeof saved === "object") {
+        initWinner = saved.a >= saved.b ? "A" : "B";
+        initPts    = initWinner === "A" ? saved.a : saved.b;
+      }
+
+      const loserInitPts = initWinner ? POINTS_PER_ROUND - initPts : "";
+      const nameA    = `${match.a[0]} & ${match.a[1]}`;
+      const nameB    = `${match.b[0]} & ${match.b[1]}`;
+      const nameW    = `am_w_${CURRENT_ROUND}_${courtIdx}`;
+      const idA      = `am_wA_${CURRENT_ROUND}_${courtIdx}`;
+      const idB      = `am_wB_${CURRENT_ROUND}_${courtIdx}`;
+      const idPts    = `am_pts_${CURRENT_ROUND}_${courtIdx}`;
+      const idRow    = `am_score_${CURRENT_ROUND}_${courtIdx}`;
+      const disabled  = STATUS === "completed" ? "disabled" : "";
       const validClass = saved ? " am-valid" : "";
-      const disabled = STATUS === "completed" ? "disabled" : "";
 
       card.innerHTML = `
         <div class="court-label">Bane ${courtIdx + 1}</div>
@@ -76,43 +90,82 @@ function renderCurrentRound() {
           <span class="vs">vs</span>
           <span class="team">${match.b[0]} &amp; ${match.b[1]}</span>
         </div>
-        <div class="americano-row">
-          <input type="number" class="americano-input${validClass}"
-                 id="am_a_${CURRENT_ROUND}_${courtIdx}"
-                 min="0" max="${POINTS_PER_ROUND}" value="${aVal}" placeholder="–" ${disabled} />
-          <span class="americano-sep">–</span>
-          <input type="number" class="americano-input${validClass}"
-                 id="am_b_${CURRENT_ROUND}_${courtIdx}"
-                 min="0" max="${POINTS_PER_ROUND}" value="${bVal}" placeholder="–" ${disabled} />
-          <span class="americano-total">av ${POINTS_PER_ROUND}</span>
+        <div class="winseg" role="group" aria-label="Vinner bane ${courtIdx + 1}">
+          <input class="winradio" type="radio" name="${nameW}" id="${idA}" value="A"
+            ${initWinner === "A" ? "checked" : ""} ${disabled}>
+          <label class="winbtn" for="${idA}">A</label>
+          <input class="winradio" type="radio" name="${nameW}" id="${idB}" value="B"
+            ${initWinner === "B" ? "checked" : ""} ${disabled}>
+          <label class="winbtn" for="${idB}">B</label>
+        </div>
+        <div id="${idRow}" class="americano-score-entry"${initWinner ? "" : ' style="display:none;"'}>
+          <div class="americano-winner-label" id="${idRow}_wlabel"></div>
+          <div class="americano-row" style="margin-top:6px;">
+            <input type="number" class="americano-input${validClass}"
+                   id="${idPts}" min="0" max="${POINTS_PER_ROUND}"
+                   value="${initPts}" placeholder="–" ${disabled} />
+            <span class="americano-total">/ ${POINTS_PER_ROUND} poeng</span>
+          </div>
+          <div class="americano-loser-text muted" id="${idRow}_llabel"></div>
         </div>
       `;
 
+      // Set text via textContent to avoid HTML-entity issues in player names
+      const wLabelEl = card.querySelector(`#${idRow}_wlabel`);
+      const lLabelEl = card.querySelector(`#${idRow}_llabel`);
+      if (initWinner) {
+        wLabelEl.textContent = `${initWinner === "A" ? nameA : nameB} vant`;
+        lLabelEl.textContent = `${initWinner === "A" ? nameB : nameA} får ${loserInitPts} poeng`;
+      }
+
       if (STATUS !== "completed") {
-        const aInput = card.querySelector(`#am_a_${CURRENT_ROUND}_${courtIdx}`);
-        const bInput = card.querySelector(`#am_b_${CURRENT_ROUND}_${courtIdx}`);
+        const radioA   = card.querySelector(`#${idA}`);
+        const radioB   = card.querySelector(`#${idB}`);
+        const ptsInput = card.querySelector(`#${idPts}`);
+        const scoreRow = card.querySelector(`#${idRow}`);
         const ri = CURRENT_ROUND, ci = courtIdx;
 
-        // Sync fields in real time
-        aInput.addEventListener("input", () => {
-          const a = parseInt(aInput.value, 10);
-          if (!isNaN(a) && a >= 0 && a <= POINTS_PER_ROUND) bInput.value = POINTS_PER_ROUND - a;
-        });
-        bInput.addEventListener("input", () => {
-          const b = parseInt(bInput.value, 10);
-          if (!isNaN(b) && b >= 0 && b <= POINTS_PER_ROUND) aInput.value = POINTS_PER_ROUND - b;
-        });
+        const getWinner = () => radioA.checked ? "A" : (radioB.checked ? "B" : null);
 
-        // Save when leaving a field (both values must be valid)
-        const trySave = async () => {
-          const a = parseInt(aInput.value, 10);
-          const b = parseInt(bInput.value, 10);
-          if (isNaN(a) || isNaN(b) || a < 0 || b < 0 || a + b !== POINTS_PER_ROUND) return;
-          try { await setAmericanoScore(ri, ci, a, b); }
-          catch (err) { console.error(err); }
+        const updateLoserText = () => {
+          const w = getWinner();
+          if (!w) return;
+          const lName = w === "A" ? nameB : nameA;
+          const pts = parseInt(ptsInput.value, 10);
+          lLabelEl.textContent = (!isNaN(pts) && pts >= 0 && pts <= POINTS_PER_ROUND)
+            ? `${lName} får ${POINTS_PER_ROUND - pts} poeng`
+            : "";
         };
-        aInput.addEventListener("change", trySave);
-        bInput.addEventListener("change", trySave);
+
+        const trySave = async () => {
+          const w = getWinner();
+          if (!w) return;
+          const winnerPts = parseInt(ptsInput.value, 10);
+          if (isNaN(winnerPts) || winnerPts < 0 || winnerPts > POINTS_PER_ROUND) return;
+          const loserPts = POINTS_PER_ROUND - winnerPts;
+          const aScore = w === "A" ? winnerPts : loserPts;
+          const bScore = w === "A" ? loserPts  : winnerPts;
+          try {
+            await setAmericanoScore(ri, ci, aScore, bScore);
+            ptsInput.classList.add("am-valid");
+          } catch (err) { console.error(err); }
+        };
+
+        const onWinnerChange = () => {
+          const w = getWinner();
+          if (!w) { scoreRow.style.display = "none"; return; }
+          wLabelEl.textContent = `${w === "A" ? nameA : nameB} vant`;
+          lLabelEl.textContent = "";
+          ptsInput.value = "";
+          ptsInput.classList.remove("am-valid");
+          scoreRow.style.display = "block";
+          ptsInput.focus();
+        };
+
+        radioA.addEventListener("change", onWinnerChange);
+        radioB.addEventListener("change", onWinnerChange);
+        ptsInput.addEventListener("input", updateLoserText);
+        ptsInput.addEventListener("change", trySave);
       }
 
     } else {
