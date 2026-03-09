@@ -193,17 +193,35 @@ export function buildSchedule(players, numCourts, seed) {
     return generateCandidateMatches(players.filter(p => !restSet.has(p)));
   });
 
-  // Build initial schedule
-  let best = perRoundCandidates.map(cands =>
-    buildRandomRound(cands, courtsPerRound, rng)
-  );
+  const buildFresh = () =>
+    perRoundCandidates.map(cands => buildRandomRound(cands, courtsPerRound, rng));
+
+  let best = buildFresh();
   let bestScore = scoreFlat(best.flat(), players);
 
-  const deadline = performance.now() + 900;
+  // 1500 ms budget; mix of single-round tweaks, 2-round swaps, and full restarts
+  // to escape local optima (two rounds must sometimes change together for improvement).
+  const deadline = performance.now() + 1500;
   while (performance.now() < deadline) {
-    const next = best.slice();
-    const idx = randInt(rng, numRounds);
-    next[idx] = buildRandomRound(perRoundCandidates[idx], courtsPerRound, rng);
+    const r = rng();
+    let next;
+    if (r < 0.04) {
+      // Full random restart
+      next = buildFresh();
+    } else if (r < 0.24) {
+      // Two-round simultaneous change — breaks local optima
+      next = best.slice();
+      const i1 = randInt(rng, numRounds);
+      let i2 = randInt(rng, numRounds - 1);
+      if (i2 >= i1) i2++;
+      next[i1] = buildRandomRound(perRoundCandidates[i1], courtsPerRound, rng);
+      next[i2] = buildRandomRound(perRoundCandidates[i2], courtsPerRound, rng);
+    } else {
+      // Standard single-round tweak
+      next = best.slice();
+      const idx = randInt(rng, numRounds);
+      next[idx] = buildRandomRound(perRoundCandidates[idx], courtsPerRound, rng);
+    }
     const s = scoreFlat(next.flat(), players);
     if (s < bestScore) { best = next; bestScore = s; }
   }
