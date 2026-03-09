@@ -186,3 +186,18 @@ export function buildExtraRound(players, courtsPerRound, seed) {
   const courts = buildRandomRound(candidates, courtsPerRound, rng);
   return { courts };
 }
+
+/* ===== Generate a full extra set of rounds ===== */
+export function buildExtraRounds(players, courtsPerRound, seed) {
+  const N = players.length;
+  if (N < 4) return [];
+  const numRounds = Math.min(
+    Math.max(Math.ceil(N * (N - 1) / (4 * courtsPerRound)), 4),
+    20
+  );
+  const rng = mulberry32(seed >>> 0);
+  const candidates = generateCandidateMatches(players);
+  return Array.from({ length: numRounds }, () => ({
+    courts: buildRandomRound(candidates, courtsPerRound, rng)
+  }));
+}

@@ -1,7 +1,7 @@
 import {
   db, firebaseReady, getDocIdFromPin, sessionRef, historyCol
 } from "./firebase.js";
-import { buildExtraRound } from "./scheduler.js";
+import { buildExtraRounds } from "./scheduler.js";
 import {
   onSnapshot, runTransaction, updateDoc, addDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
@@ -322,17 +322,17 @@ async function goToRound(idx) {
   });
 }
 
-/* ===== Extra round ===== */
+/* ===== Extra rounds ===== */
 async function addExtraRound() {
   if (!CURRENT_DOC_ID) return;
   const courtsPerRound = ROUNDS[0]?.courts?.length || 1;
-  const newRound = buildExtraRound(PLAYERS, courtsPerRound, Date.now() >>> 0);
-  if (!newRound) return;
+  const extraRounds = buildExtraRounds(PLAYERS, courtsPerRound, Date.now() >>> 0);
+  if (!extraRounds.length) return;
 
-  const newRounds = [...ROUNDS, newRound];
+  const newRounds = [...ROUNDS, ...extraRounds];
   await updateDoc(sessionRef(CURRENT_DOC_ID), {
     rounds: newRounds,
-    currentRound: newRounds.length - 1,
+    currentRound: ROUNDS.length,
     updatedAt: serverTimestamp(),
   });
 }
