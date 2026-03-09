@@ -144,6 +144,33 @@ function scoreFlat(matches, players) {
   );
 }
 
+/* ===== Sit-out rotation ===== */
+// Pre-assigns who sits out per round so each player rests as evenly as possible.
+// Returns array[numRounds] of resting-player arrays.
+function buildSitOutRotation(players, numRounds, restPerRound, rng) {
+  if (restPerRound <= 0) return Array.from({ length: numRounds }, () => []);
+
+  const N = players.length;
+  const totalRests = numRounds * restPerRound;
+  const baseCount = Math.floor(totalRests / N);
+  const extras = totalRests % N;
+
+  // Each player rests baseCount times; `extras` players get one extra.
+  const shuffledPlayers = shuffle(players, rng);
+  const queue = [];
+  shuffledPlayers.forEach((p, i) => {
+    const count = baseCount + (i < extras ? 1 : 0);
+    for (let j = 0; j < count; j++) queue.push(p);
+  });
+
+  // Shuffle queue so rest rounds are random, not sequential.
+  const shuffledQueue = shuffle(queue, rng);
+
+  return Array.from({ length: numRounds }, (_, r) =>
+    shuffledQueue.slice(r * restPerRound, (r + 1) * restPerRound)
+  );
+}
+
 /* ===== Main export ===== */
 export function buildSchedule(players, numCourts, seed) {
   const N = players.length;
@@ -156,11 +183,19 @@ export function buildSchedule(players, numCourts, seed) {
   );
 
   const rng = mulberry32(seed >>> 0);
-  const candidates = generateCandidateMatches(players);
+
+  // Pre-assign balanced sit-out rotation, then generate per-round candidates
+  // from only the active players — this guarantees even rest distribution.
+  const restPerRound = N - courtsPerRound * 4;
+  const sitOutRotation = buildSitOutRotation(players, numRounds, restPerRound, rng);
+  const perRoundCandidates = sitOutRotation.map(resting => {
+    const restSet = new Set(resting);
+    return generateCandidateMatches(players.filter(p => !restSet.has(p)));
+  });
 
   // Build initial schedule
-  let best = Array.from({ length: numRounds }, () =>
-    buildRandomRound(candidates, courtsPerRound, rng)
+  let best = perRoundCandidates.map(cands =>
+    buildRandomRound(cands, courtsPerRound, rng)
   );
   let bestScore = scoreFlat(best.flat(), players);
 
@@ -168,7 +203,7 @@ export function buildSchedule(players, numCourts, seed) {
   while (performance.now() < deadline) {
     const next = best.slice();
     const idx = randInt(rng, numRounds);
-    next[idx] = buildRandomRound(candidates, courtsPerRound, rng);
+    next[idx] = buildRandomRound(perRoundCandidates[idx], courtsPerRound, rng);
     const s = scoreFlat(next.flat(), players);
     if (s < bestScore) { best = next; bestScore = s; }
   }
@@ -196,8 +231,11 @@ export function buildExtraRounds(players, courtsPerRound, seed) {
     20
   );
   const rng = mulberry32(seed >>> 0);
-  const candidates = generateCandidateMatches(players);
-  return Array.from({ length: numRounds }, () => ({
-    courts: buildRandomRound(candidates, courtsPerRound, rng)
-  }));
+  const restPerRound = N - courtsPerRound * 4;
+  const sitOutRotation = buildSitOutRotation(players, numRounds, restPerRound, rng);
+  return sitOutRotation.map(resting => {
+    const restSet = new Set(resting);
+    const candidates = generateCandidateMatches(players.filter(p => !restSet.has(p)));
+    return { courts: buildRandomRound(candidates, courtsPerRound, rng) };
+  });
 }
