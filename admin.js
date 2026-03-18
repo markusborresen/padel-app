@@ -121,15 +121,18 @@ async function endSession(session) {
         }
       }
 
-      await addDoc(historyCol(), {
+      const historyEntry = {
         pin, players,
         numCourts: rounds[0]?.courts?.length || 1,
         rounds: rounds.slice(0, validRounds),
         winners: validWinners,
         finalScores, totalMatches,
-        mode, pointsPerRound,
+        mode: mode || "classic",
         completedAt: serverTimestamp(),
-      });
+      };
+      // Only include optional fields if they are defined (old sessions may lack them)
+      if (pointsPerRound !== undefined) historyEntry.pointsPerRound = pointsPerRound;
+      await addDoc(historyCol(), historyEntry);
     }
 
     await updateDoc(sessionRef(id), {
