@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aktive kamper – Padelplan</title>
+  <link rel="stylesheet" href="./style.css" />
+  <style>
+    .session-card { border: 1.5px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 14px; background: #fff; }
+    .session-pin  { font-size: 26px; font-weight: 700; letter-spacing: 5px; color: #111; }
+    .session-meta { color: #6b7280; font-size: 14px; margin-top: 4px; }
+    .session-players { color: #374151; margin: 6px 0 12px; font-size: 15px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="row" style="align-items:center; margin-bottom:20px;">
+      <a href="./index.html" class="btn" style="padding:6px 14px; flex-shrink:0;">← Hjem</a>
+      <h1 style="margin:0 0 0 12px; font-size:20px;">Aktive kamper</h1>
+      <div class="spacer"></div>
+      <button class="btn" id="refreshBtn" title="Oppdater" style="padding:6px 12px;">↺</button>
+    </div>
+
+    <div id="loadingMsg" class="muted" style="text-align:center; padding:32px 0;">Laster…</div>
+    <div id="emptyMsg"   class="muted" style="text-align:center; padding:32px 0; display:none;">Ingen aktive kamper.</div>
+    <div id="sessionList" style="display:none;"></div>
+  </div>
+
+  <script type="module" src="./admin.js"></script>
+</body>
+</html>
