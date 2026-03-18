@@ -171,6 +171,103 @@ function buildSitOutRotation(players, numRounds, restPerRound, rng) {
   );
 }
 
+/* ===== Deterministic schedule for no-sit-out cases (n = 4k players) ===== */
+
+// Converts two partner-pairs into a normalised match object.
+function pairsToMatch(pair1, pair2) {
+  const a = normalizeTeam(pair1[0], pair1[1]);
+  const b = normalizeTeam(pair2[0], pair2[1]);
+  const ta = a.join('|'), tb = b.join('|');
+  return ta < tb ? { a, b } : { a: b, b: a };
+}
+
+// All ways to partition 2k partner-pairs into k matches (courts).
+// k=1 → 1 option; k=2 → 3 options; k=3 → 15 options.
+function allCourtGroupings(pairs, k) {
+  if (k === 1) return [[pairsToMatch(pairs[0], pairs[1])]];
+  if (k === 2) {
+    // Fast path – exactly 3 options
+    return [
+      [pairsToMatch(pairs[0], pairs[1]), pairsToMatch(pairs[2], pairs[3])],
+      [pairsToMatch(pairs[0], pairs[2]), pairsToMatch(pairs[1], pairs[3])],
+      [pairsToMatch(pairs[0], pairs[3]), pairsToMatch(pairs[1], pairs[2])],
+    ];
+  }
+  // General recursive case
+  const results = [];
+  function gen(rem, cur) {
+    if (!rem.length) { results.push(cur.slice()); return; }
+    const first = rem[0];
+    for (let i = 1; i < rem.length; i++) {
+      cur.push(pairsToMatch(first, rem[i]));
+      gen(rem.filter((_, j) => j !== 0 && j !== i), cur);
+      cur.pop();
+    }
+  }
+  gen(pairs, []);
+  return results;
+}
+
+// "One fixed player" cyclic round-robin — classic construction for round-robin scheduling.
+// For n = 4k players this produces n-1 rounds with perfect partner coverage (each pair
+// appears as partners exactly once across the n-1 rounds).
+// If numRounds > n-1, the cycle wraps (one repeat round per extra).
+// Returns array[numRounds] of array[2k] partner-pairs (each pair = [playerA, playerB]).
+function buildCyclicPartnerPairs(players, courtsPerRound, numRounds) {
+  const n = players.length;
+  const m = n - 1; // cycle length (always odd for even n)
+  const result = [];
+  for (let r = 0; r < numRounds; r++) {
+    const ri = r % m;
+    const cIdx = i => players[1 + ((i + ri) % m)];
+    const pairs = [[players[0], cIdx(0)]]; // fixed player 0 with cycle position ri
+    for (let i = 1; i < Math.ceil(m / 2); i++) pairs.push([cIdx(i), cIdx(m - i)]);
+    result.push(pairs); // 2k pairs covering all n players
+  }
+  return result;
+}
+
+// Phase 1 (cyclic) + Phase 2 (exhaustive or stochastic court groupings).
+// Guaranteed perfect partner coverage for n = 4k players.
+function buildDeterministicSchedule(players, courtsPerRound, numRounds, rng) {
+  const partnerSets = buildCyclicPartnerPairs(players, courtsPerRound, numRounds);
+  const roundOptions = partnerSets.map(ps => allCourtGroupings(ps, courtsPerRound));
+  const totalCombinations = roundOptions.reduce((p, opts) => p * opts.length, 1);
+
+  if (totalCombinations <= 50000) {
+    // Exhaustive search — provably optimal opponent distribution, runs in < 5 ms.
+    // For 8 players / 2 courts / 7 rounds: 3^7 = 2187 combinations.
+    let best = null, bestScore = Infinity;
+    const current = new Array(numRounds);
+    const search = r => {
+      if (r === numRounds) {
+        const s = scoreFlat(current.flat(), players);
+        if (s < bestScore) { bestScore = s; best = current.slice(); }
+        return;
+      }
+      for (const opt of roundOptions[r]) { current[r] = opt; search(r + 1); }
+    };
+    search(0);
+    return best;
+  }
+
+  // Large case (12+ players, 3+ courts): stochastic optimisation on court groupings only.
+  // Partner coverage is already perfect; we only tune opponent balance.
+  let best = roundOptions.map(opts => opts[randInt(rng, opts.length)]);
+  let bestScore = scoreFlat(best.flat(), players);
+  const deadline = performance.now() + 800;
+  while (performance.now() < deadline) {
+    const idx = randInt(rng, numRounds);
+    const opts = roundOptions[idx];
+    if (opts.length <= 1) continue;
+    const next = best.slice();
+    next[idx] = opts[randInt(rng, opts.length)];
+    const s = scoreFlat(next.flat(), players);
+    if (s < bestScore) { best = next; bestScore = s; }
+  }
+  return best;
+}
+
 /* ===== Main export ===== */
 export function buildSchedule(players, numCourts, seed) {
   const N = players.length;
@@ -183,51 +280,58 @@ export function buildSchedule(players, numCourts, seed) {
   );
 
   const rng = mulberry32(seed >>> 0);
-
-  // Pre-assign balanced sit-out rotation, then generate per-round candidates
-  // from only the active players — this guarantees even rest distribution.
   const restPerRound = N - courtsPerRound * 4;
-  const sitOutRotation = buildSitOutRotation(players, numRounds, restPerRound, rng);
-  const perRoundCandidates = sitOutRotation.map(resting => {
-    const restSet = new Set(resting);
-    return generateCandidateMatches(players.filter(p => !restSet.has(p)));
-  });
 
-  const buildFresh = () =>
-    perRoundCandidates.map(cands => buildRandomRound(cands, courtsPerRound, rng));
+  let rounds;
 
-  let best = buildFresh();
-  let bestScore = scoreFlat(best.flat(), players);
+  if (restPerRound === 0) {
+    // All players active every round (n = 4k).
+    // Phase 1: deterministic cyclic construction → guaranteed perfect partner coverage.
+    // Phase 2: exhaustive search over court groupings → optimal opponent balance.
+    rounds = buildDeterministicSchedule(players, courtsPerRound, numRounds, rng);
+  } else {
+    // Has sit-outs: stochastic hill-climbing with perturbation restarts.
+    // Per-round candidate pool is restricted to active players, so sit-out
+    // distribution is always perfectly even.
+    const sitOutRotation = buildSitOutRotation(players, numRounds, restPerRound, rng);
+    const perRoundCandidates = sitOutRotation.map(resting => {
+      const restSet = new Set(resting);
+      return generateCandidateMatches(players.filter(p => !restSet.has(p)));
+    });
 
-  // 1500 ms budget; mix of single-round tweaks, 2-round swaps, and full restarts
-  // to escape local optima (two rounds must sometimes change together for improvement).
-  const deadline = performance.now() + 1500;
-  while (performance.now() < deadline) {
-    const r = rng();
-    let next;
-    if (r < 0.04) {
-      // Full random restart
-      next = buildFresh();
-    } else if (r < 0.24) {
-      // Two-round simultaneous change — breaks local optima
-      next = best.slice();
-      const i1 = randInt(rng, numRounds);
-      let i2 = randInt(rng, numRounds - 1);
-      if (i2 >= i1) i2++;
-      next[i1] = buildRandomRound(perRoundCandidates[i1], courtsPerRound, rng);
-      next[i2] = buildRandomRound(perRoundCandidates[i2], courtsPerRound, rng);
-    } else {
-      // Standard single-round tweak
-      next = best.slice();
-      const idx = randInt(rng, numRounds);
-      next[idx] = buildRandomRound(perRoundCandidates[idx], courtsPerRound, rng);
+    const buildFresh = () =>
+      perRoundCandidates.map(cands => buildRandomRound(cands, courtsPerRound, rng));
+
+    let best = buildFresh();
+    let bestScore = scoreFlat(best.flat(), players);
+
+    // 1500 ms; mix of single-round tweaks, 2-round swaps, and full restarts.
+    const deadline = performance.now() + 1500;
+    while (performance.now() < deadline) {
+      const r = rng();
+      let next;
+      if (r < 0.04) {
+        next = buildFresh();
+      } else if (r < 0.24) {
+        next = best.slice();
+        const i1 = randInt(rng, numRounds);
+        let i2 = randInt(rng, numRounds - 1);
+        if (i2 >= i1) i2++;
+        next[i1] = buildRandomRound(perRoundCandidates[i1], courtsPerRound, rng);
+        next[i2] = buildRandomRound(perRoundCandidates[i2], courtsPerRound, rng);
+      } else {
+        next = best.slice();
+        const idx = randInt(rng, numRounds);
+        next[idx] = buildRandomRound(perRoundCandidates[idx], courtsPerRound, rng);
+      }
+      const s = scoreFlat(next.flat(), players);
+      if (s < bestScore) { best = next; bestScore = s; }
     }
-    const s = scoreFlat(next.flat(), players);
-    if (s < bestScore) { best = next; bestScore = s; }
+    rounds = best;
   }
 
   // Wrap each round as { courts: [...] } — Firestore does not support nested arrays
-  return { rounds: best.map(courts => ({ courts })) };
+  return { rounds: rounds.map(courts => ({ courts })) };
 }
 
 /* ===== Generate one extra round ===== */
