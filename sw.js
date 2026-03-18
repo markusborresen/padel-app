@@ -1,39 +1,56 @@
-const CACHE = 'padelplan-v1';
+const VERSION = 'padelplan-v5';
 const ASSETS = [
   '/padel-app/',
   '/padel-app/index.html',
   '/padel-app/match.html',
-  '/padel-app/kamp.html',
   '/padel-app/stats.html',
+  '/padel-app/americano-stats.html',
+  '/padel-app/admin.html',
   '/padel-app/style.css',
   '/padel-app/app.js',
   '/padel-app/match.js',
-  '/padel-app/kamp.js',
   '/padel-app/stats.js',
+  '/padel-app/americano-stats.js',
+  '/padel-app/admin.js',
   '/padel-app/firebase.js',
   '/padel-app/scheduler.js',
   '/padel-app/icons/icon-192.png',
   '/padel-app/icons/icon-512.png',
 ];
 
+// Install: pre-cache all app files and activate immediately
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
   self.skipWaiting();
+  e.waitUntil(
+    caches.open(VERSION).then(c => c.addAll(ASSETS))
+  );
 });
 
+// Activate: delete ALL old caches, then take control of open pages
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    )
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => k !== VERSION).map(k => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// Network-first for Firebase, cache-first for static assets
+// Network-first: always try network for fresh content, fall back to cache offline.
+// Skip Firebase/gstatic requests (handled natively).
 self.addEventListener('fetch', e => {
-  if (e.request.url.includes('firestore') || e.request.url.includes('firebase')) return;
+  const url = e.request.url;
+  if (url.includes('firestore') || url.includes('firebase') || url.includes('gstatic')) return;
+
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    fetch(e.request)
+      .then(res => {
+        // Store fresh response in cache for offline use
+        const clone = res.clone();
+        caches.open(VERSION).then(c => c.put(e.request, clone));
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
