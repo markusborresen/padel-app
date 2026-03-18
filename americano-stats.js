@@ -130,4 +130,22 @@ async function loadStats() {
   }
 }
 
-window.addEventListener("load", loadStats);
+async function clearAmericanoStats() {
+  if (!confirm("Sletter ALL Americano-statistikk permanent. Kan ikke angres. Fortsett?")) return;
+  try {
+    await firebaseReady;
+    const snap = await getDocs(collection(db, "history"));
+    const amDocs = snap.docs.filter(d => d.data().mode === "americano");
+    await Promise.all(amDocs.map(d => deleteDoc(doc(db, "history", d.id))));
+    alert(`Slettet ${amDocs.length} kamp${amDocs.length !== 1 ? "er" : ""}.`);
+    location.reload();
+  } catch (err) {
+    alert("Feil ved sletting: " + (err?.message || err));
+  }
+}
+
+window.addEventListener("load", () => {
+  loadStats();
+  document.getElementById("clearStatsBtn")
+    ?.addEventListener("click", clearAmericanoStats);
+});

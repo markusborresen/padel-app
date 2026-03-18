@@ -156,4 +156,22 @@ async function loadStats() {
   }
 }
 
-window.addEventListener("load", loadStats);
+async function clearClassicStats() {
+  if (!confirm("Sletter ALL Klassisk-statistikk permanent. Kan ikke angres. Fortsett?")) return;
+  try {
+    await firebaseReady;
+    const snap = await getDocs(collection(db, "history"));
+    const classicDocs = snap.docs.filter(d => d.data().mode !== "americano");
+    await Promise.all(classicDocs.map(d => deleteDoc(doc(db, "history", d.id))));
+    alert(`Slettet ${classicDocs.length} kamp${classicDocs.length !== 1 ? "er" : ""}.`);
+    location.reload();
+  } catch (err) {
+    alert("Feil ved sletting: " + (err?.message || err));
+  }
+}
+
+window.addEventListener("load", () => {
+  loadStats();
+  document.getElementById("clearStatsBtn")
+    ?.addEventListener("click", clearClassicStats);
+});

@@ -62,26 +62,23 @@ function renderCurrentRound() {
     card.className = "court-card";
 
     if (MODE === "americano") {
-      // ===== Americano: velg vinner → skriv inn poeng =====
+      // ===== Americano: velg vinner → trykk poeng =====
       const saved = WINNERS[winnerKey]; // {a, b} or undefined
 
       let initWinner = null;
-      let initPts    = "";
+      let initPts    = null;
       if (saved && typeof saved === "object") {
         initWinner = saved.a >= saved.b ? "A" : "B";
         initPts    = initWinner === "A" ? saved.a : saved.b;
       }
 
-      const loserInitPts = initWinner ? POINTS_PER_ROUND - initPts : "";
-      const nameA    = `${match.a[0]} & ${match.a[1]}`;
-      const nameB    = `${match.b[0]} & ${match.b[1]}`;
-      const nameW    = `am_w_${CURRENT_ROUND}_${courtIdx}`;
-      const idA      = `am_wA_${CURRENT_ROUND}_${courtIdx}`;
-      const idB      = `am_wB_${CURRENT_ROUND}_${courtIdx}`;
-      const idPts    = `am_pts_${CURRENT_ROUND}_${courtIdx}`;
-      const idRow    = `am_score_${CURRENT_ROUND}_${courtIdx}`;
-      const disabled  = STATUS === "completed" ? "disabled" : "";
-      const validClass = saved ? " am-valid" : "";
+      const nameA   = `${match.a[0]} & ${match.a[1]}`;
+      const nameB   = `${match.b[0]} & ${match.b[1]}`;
+      const nameW   = `am_w_${CURRENT_ROUND}_${courtIdx}`;
+      const idA     = `am_wA_${CURRENT_ROUND}_${courtIdx}`;
+      const idB     = `am_wB_${CURRENT_ROUND}_${courtIdx}`;
+      const idRow   = `am_score_${CURRENT_ROUND}_${courtIdx}`;
+      const disabled = STATUS === "completed" ? "disabled" : "";
 
       card.innerHTML = `
         <div class="court-label">Bane ${courtIdx + 1}</div>
@@ -100,72 +97,69 @@ function renderCurrentRound() {
         </div>
         <div id="${idRow}" class="americano-score-entry"${initWinner ? "" : ' style="display:none;"'}>
           <div class="americano-winner-label" id="${idRow}_wlabel"></div>
-          <div class="americano-row" style="margin-top:6px;">
-            <input type="number" class="americano-input${validClass}"
-                   id="${idPts}" min="0" max="${POINTS_PER_ROUND}"
-                   value="${initPts}" placeholder="–" ${disabled} />
-            <span class="americano-total">/ ${POINTS_PER_ROUND} poeng</span>
-          </div>
+          <div class="score-picker-grid" id="${idRow}_grid"></div>
           <div class="americano-loser-text muted" id="${idRow}_llabel"></div>
         </div>
       `;
 
-      // Set text via textContent to avoid HTML-entity issues in player names
+      // Labels via textContent (safe for special chars in player names)
       const wLabelEl = card.querySelector(`#${idRow}_wlabel`);
       const lLabelEl = card.querySelector(`#${idRow}_llabel`);
       if (initWinner) {
         wLabelEl.textContent = `${initWinner === "A" ? nameA : nameB} vant`;
-        lLabelEl.textContent = `${initWinner === "A" ? nameB : nameA} får ${loserInitPts} poeng`;
+        lLabelEl.textContent = `${initWinner === "A" ? nameB : nameA} får ${POINTS_PER_ROUND - initPts} poeng`;
+      }
+
+      // Build tap-able score buttons: from tied score (ceil(max/2)) up to max
+      const gridEl    = card.querySelector(`#${idRow}_grid`);
+      const half      = Math.ceil(POINTS_PER_ROUND / 2);
+      const scoreBtns = [];
+      for (let pts = half; pts <= POINTS_PER_ROUND; pts++) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "score-btn" + (pts === initPts ? " selected" : "");
+        btn.textContent = pts;
+        if (disabled) btn.disabled = true;
+        gridEl.appendChild(btn);
+        scoreBtns.push({ btn, pts });
       }
 
       if (STATUS !== "completed") {
         const radioA   = card.querySelector(`#${idA}`);
         const radioB   = card.querySelector(`#${idB}`);
-        const ptsInput = card.querySelector(`#${idPts}`);
         const scoreRow = card.querySelector(`#${idRow}`);
         const ri = CURRENT_ROUND, ci = courtIdx;
 
         const getWinner = () => radioA.checked ? "A" : (radioB.checked ? "B" : null);
 
-        const updateLoserText = () => {
+        const selectScore = async (pts) => {
+          scoreBtns.forEach(({ btn }) => btn.classList.remove("selected"));
+          scoreBtns.find(x => x.pts === pts)?.btn.classList.add("selected");
           const w = getWinner();
           if (!w) return;
-          const lName = w === "A" ? nameB : nameA;
-          const pts = parseInt(ptsInput.value, 10);
-          lLabelEl.textContent = (!isNaN(pts) && pts >= 0 && pts <= POINTS_PER_ROUND)
-            ? `${lName} får ${POINTS_PER_ROUND - pts} poeng`
-            : "";
+          lLabelEl.textContent = `${w === "A" ? nameB : nameA} får ${POINTS_PER_ROUND - pts} poeng`;
+          const loserPts = POINTS_PER_ROUND - pts;
+          const aScore = w === "A" ? pts : loserPts;
+          const bScore = w === "A" ? loserPts : pts;
+          try { await setAmericanoScore(ri, ci, aScore, bScore); }
+          catch (err) { console.error(err); }
         };
 
-        const trySave = async () => {
-          const w = getWinner();
-          if (!w) return;
-          const winnerPts = parseInt(ptsInput.value, 10);
-          if (isNaN(winnerPts) || winnerPts < 0 || winnerPts > POINTS_PER_ROUND) return;
-          const loserPts = POINTS_PER_ROUND - winnerPts;
-          const aScore = w === "A" ? winnerPts : loserPts;
-          const bScore = w === "A" ? loserPts  : winnerPts;
-          try {
-            await setAmericanoScore(ri, ci, aScore, bScore);
-            ptsInput.classList.add("am-valid");
-          } catch (err) { console.error(err); }
-        };
+        scoreBtns.forEach(({ btn, pts }) =>
+          btn.addEventListener("click", () => selectScore(pts))
+        );
 
         const onWinnerChange = () => {
           const w = getWinner();
           if (!w) { scoreRow.style.display = "none"; return; }
           wLabelEl.textContent = `${w === "A" ? nameA : nameB} vant`;
           lLabelEl.textContent = "";
-          ptsInput.value = "";
-          ptsInput.classList.remove("am-valid");
+          scoreBtns.forEach(({ btn }) => btn.classList.remove("selected"));
           scoreRow.style.display = "block";
-          ptsInput.focus();
         };
 
         radioA.addEventListener("change", onWinnerChange);
         radioB.addEventListener("change", onWinnerChange);
-        ptsInput.addEventListener("input", updateLoserText);
-        ptsInput.addEventListener("change", trySave);
       }
 
     } else {
