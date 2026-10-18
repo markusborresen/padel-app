@@ -163,10 +163,39 @@ function renderCurrentRound() {
   el("restingLine").textContent = resting.length ? `Hviler: ${resting.join(", ")}` : "";
 }
 
+// Planned matches per player (finale excluded): uneven counts give an advantage
+function plannedMatches() {
+  const counts = Object.fromEntries(PLAYERS.map(p => [p, 0]));
+  for (const r of ROUNDS) {
+    if (r.final) continue;
+    for (const m of r.courts || []) for (const p of [...m.a, ...m.b]) counts[p] = (counts[p] || 0) + 1;
+  }
+  return counts;
+}
+
 function renderScores() {
+  const counts = plannedMatches();
+  const vals = Object.values(counts);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const extra = max > min ? new Set(PLAYERS.filter(p => counts[p] > min)) : new Set();
+
+  const note = el("advantageNote");
+  if (extra.size) {
+    const names = [...extra].join(", ");
+    const diff = max - min;
+    note.textContent = `⚠️ Fordel: ${names} spiller ${diff === 1 ? "én kamp" : diff + " kamper"} mer enn de andre `
+      + `(${max} mot ${min}) og kan derfor få flere poeng.`;
+    note.style.display = "block";
+  } else {
+    note.style.display = "none";
+  }
+
   const entries = Object.entries(SCORES).sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]));
   el("scores").innerHTML = entries
-    .map(([p, pts]) => `<div class="score-row"><span class="pill">${pts}</span>${p}</div>`)
+    .map(([p, pts]) => {
+      const tag = extra.has(p) ? ` <span class="extra-tag">+${counts[p] - min} kamp</span>` : "";
+      return `<div class="score-row"><span class="pill">${pts}</span>${p}${tag}</div>`;
+    })
     .join("");
 }
 
@@ -249,7 +278,9 @@ async function addExtraRound() {
       !confirm("Ikke alle kamper er ferdig registrert. Legge til ny runde likevel?")) return;
 
   const courtsPerRound = ROUNDS[0]?.courts?.length || 1;
-  const extraRounds = buildExtraRounds(PLAYERS, courtsPerRound, Date.now() >>> 0);
+  const lastPlaying = new Set((ROUNDS[ROUNDS.length - 1]?.courts || []).flatMap(m => [...m.a, ...m.b]));
+  const lastRested = PLAYERS.filter(p => !lastPlaying.has(p));
+  const extraRounds = buildExtraRounds(PLAYERS, courtsPerRound, Date.now() >>> 0, lastRested);
   if (!extraRounds.length) return;
 
   await updateDoc(sessionRef(CURRENT_DOC_ID), {

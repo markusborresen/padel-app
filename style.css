@@ -307,3 +307,24 @@ textarea:focus { border-color: #16a34a; }
   .winbtn { padding: 12px 0; font-size: 22px; }
   .scoregrid { grid-template-columns: 1fr; }
 }
+
+/* ===== Uneven match count warning ===== */
+.advantage-note {
+  background: #fffbeb;
+  border: 1.5px solid #fcd34d;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #92400e;
+  margin-bottom: 10px;
+}
+.extra-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+}

@@ -1,7 +1,7 @@
 import {
   db, firebaseReady, getDocIdFromPin, sessionRef, generatePin6
 } from "./firebase.js";
-import { buildSchedule } from "./scheduler.js";
+import { buildSchedule, courtsInUse, matchesPerCycle } from "./scheduler.js";
 import {
   runTransaction, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
@@ -36,24 +36,27 @@ function suggestedCourts(n) {
 }
 
 function getPointsPerRound() {
-  return parseInt(el('pointsPerRound').value, 10) || 32;
+  return parseInt(el('pointsPerRound').value, 10) || 21;
 }
 
 function updateMatchInfo() {
   const N = document.querySelectorAll('#playerInputs .player-cell').length;
   const courts = parseInt(el('createCourts').value, 10);
-  const pts = getPointsPerRound();
-  const serves = pts / 4;
+  const c = courtsInUse(N, courts);
+  const R = matchesPerCycle(N, c);
+  const resting = N - c * 4;
 
-  const courtsPerRound = Math.min(courts, Math.floor(N / 4));
-  const numRounds = Math.min(Math.max(Math.ceil(N * (N - 1) / (4 * courtsPerRound)), 4), 20);
-  const resting = N - courtsPerRound * 4;
-
-  let text = `${numRounds} kamper hver runde`;
-  text += ` · ${Number.isInteger(serves) ? serves : '~' + serves.toFixed(1)} server per spiller`;
+  let text = `${R} kamper – alle spiller på lag med alle minst én gang`;
   if (resting > 0) text += ` · ${resting} hviler per kamp`;
-  if (courts > courtsPerRound) text += ` · kun ${courtsPerRound} bane${courtsPerRound > 1 ? 'r' : ''} i bruk`;
+  if ((R * c * 4) % N !== 0) text += ` · noen spiller én kamp mer enn andre`;
+  if (courts > c) text += ` · kun ${c} bane${c > 1 ? 'r' : ''} i bruk`;
   el('servesInfo').textContent = text;
+}
+
+// Mobile keyboards don't always re-enable caps when focus moves via Enter
+function capitalizeFirst(input) {
+  const v = input.value;
+  if (v.length === 1 && v !== v.toUpperCase()) input.value = v.toUpperCase();
 }
 
 function updatePlayerCount() {
@@ -84,11 +87,12 @@ function addPlayerCell() {
   div.innerHTML = `
     <span class="player-num">${num}</span>
     <input type="text" class="player-input" placeholder="Spiller ${num}"
-           autocomplete="off" enterkeyhint="next" />
+           autocomplete="off" autocapitalize="words" enterkeyhint="next" />
     <button type="button" class="player-remove" title="Fjern spiller" disabled>×</button>
   `;
 
   const input = div.querySelector('.player-input');
+  input.addEventListener('input', () => capitalizeFirst(input));
   div.querySelector('.player-remove').addEventListener('click', () => {
     div.remove();
     renumberCells();
