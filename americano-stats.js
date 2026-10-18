@@ -130,14 +130,13 @@ async function loadStats() {
   }
 }
 
-async function clearAmericanoStats() {
-  if (!confirm("Sletter ALL Americano-statistikk permanent. Kan ikke angres. Fortsett?")) return;
+async function clearAllStats() {
+  if (!confirm("Sletter ALL statistikk permanent (også gamle klassiske kamper). Kan ikke angres. Fortsett?")) return;
   try {
     await firebaseReady;
     const snap = await getDocs(collection(db, "history"));
-    const amDocs = snap.docs.filter(d => d.data().mode === "americano");
-    await Promise.all(amDocs.map(d => deleteDoc(doc(db, "history", d.id))));
-    alert(`Slettet ${amDocs.length} kamp${amDocs.length !== 1 ? "er" : ""}.`);
+    await Promise.all(snap.docs.map(d => deleteDoc(doc(db, "history", d.id))));
+    alert(`Slettet ${snap.size} kamp${snap.size !== 1 ? "er" : ""}.`);
     location.reload();
   } catch (err) {
     alert("Feil ved sletting: " + (err?.message || err));
@@ -147,5 +146,5 @@ async function clearAmericanoStats() {
 window.addEventListener("load", () => {
   loadStats();
   document.getElementById("clearStatsBtn")
-    ?.addEventListener("click", clearAmericanoStats);
+    ?.addEventListener("click", clearAllStats);
 });

@@ -68,8 +68,7 @@
         <button class="btn big" id="goJoinBtn" style="flex:1;">Bli med</button>
       </div>
       <div class="row" style="margin-top:10px;">
-        <a href="./stats.html" class="btn big" style="flex:1; text-align:center;">Klassisk statistikk</a>
-        <a href="./americano-stats.html" class="btn big" style="flex:1; text-align:center;">Americano statistikk</a>
+        <a href="./americano-stats.html" class="btn big" style="flex:1; text-align:center;">Statistikk</a>
       </div>
       <div style="text-align:center; margin-top:10px;">
         <a href="./admin.html" class="muted" style="font-size:13px;">Administrer aktive kamper</a>
@@ -90,40 +89,26 @@
         <button type="button" class="btn" id="addPlayerBtn" style="margin-top:8px; font-size:13px; padding:8px 14px;">+ Legg til spiller</button>
       </div>
 
-      <!-- Courts -->
-      <div style="margin-top:14px;">
-        <label for="createCourts">Antall baner</label>
-        <select id="createCourts">
-          <option value="1">1 bane</option>
-          <option value="2" selected>2 baner</option>
-          <option value="3">3 baner</option>
-          <option value="4">4 baner</option>
-          <option value="5">5 baner</option>
-          <option value="6">6 baner</option>
-        </select>
-      </div>
-
-      <!-- Game mode -->
-      <div style="margin-top:14px;">
-        <label for="gameMode">Spillemodus</label>
-        <select id="gameMode">
-          <option value="classic">Klassisk — vinn kampen</option>
-          <option value="americano">Americano — poeng per ball</option>
-        </select>
-      </div>
-
-      <!-- Americano: points per round (hidden by default) -->
-      <div id="americanoOptions" style="display:none; margin-top:12px;">
-        <label for="pointsPerRound">Poeng per runde</label>
-        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px;">
-          <input type="number" id="pointsPerRound" min="4" step="4" value="32"
+      <!-- Courts (auto-suggested from player count) + points -->
+      <div class="row" style="margin-top:14px; gap:12px; align-items:flex-end;">
+        <div>
+          <label for="createCourts">Baner</label>
+          <select id="createCourts">
+            <option value="1" selected>1 bane</option>
+            <option value="2">2 baner</option>
+            <option value="3">3 baner</option>
+            <option value="4">4 baner</option>
+            <option value="5">5 baner</option>
+            <option value="6">6 baner</option>
+          </select>
+        </div>
+        <div>
+          <label for="pointsPerRound">Poeng per kamp</label>
+          <input type="number" id="pointsPerRound" min="4" step="4" value="32" inputmode="numeric"
                  style="width:90px; text-align:center; font-size:16px; font-weight:600;" />
-          <span id="servesInfo" class="muted"></span>
         </div>
       </div>
-
-      <!-- Match info -->
-      <div id="matchInfo" style="margin-top:12px; background:#f0fdf4; border-radius:12px; padding:10px 14px; font-size:13px; color:#166534; display:none;"></div>
+      <p id="servesInfo" class="muted" style="margin-top:6px;"></p>
 
       <p class="muted" style="margin-top:10px;">
         PIN genereres automatisk. Del den med de andre spillerne slik at de kan bli med.

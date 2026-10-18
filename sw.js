@@ -1,4 +1,4 @@
-const VERSION = 'padelplan-v5';
+const VERSION = 'padelplan-v6';
 const ASSETS = [
   '/padel-app/',
   '/padel-app/index.html',
@@ -14,6 +14,7 @@ const ASSETS = [
   '/padel-app/admin.js',
   '/padel-app/firebase.js',
   '/padel-app/scheduler.js',
+  '/padel-app/results.js',
   '/padel-app/icons/icon-192.png',
   '/padel-app/icons/icon-512.png',
 ];

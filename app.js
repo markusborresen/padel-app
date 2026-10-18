@@ -6,10 +6,12 @@ import {
   runTransaction, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
+const el = id => document.getElementById(id);
+
 /* ===== View switching ===== */
 function showView(name) {
   for (const id of ["viewHome", "viewCreate", "viewJoin", "viewLoading"]) {
-    document.getElementById(id).classList.toggle("active", id === name);
+    el(id).classList.toggle("active", id === name);
   }
 }
 
@@ -28,63 +30,53 @@ function getPlayerNames() {
   return names;
 }
 
-function updateServesInfo() {
-  const pts = parseInt(document.getElementById('pointsPerRound').value, 10);
-  const el = document.getElementById('servesInfo');
-  if (!pts || pts < 1) { el.textContent = ''; return; }
-  const serves = pts / 4;
-  el.textContent = Number.isInteger(serves)
-    ? `= ${serves} server per spiller`
-    : `(ikke delelig med 4 – ulike server per spiller)`;
+// Up to 7 players → 1 court, up to 15 → 2, up to 23 → 3, …
+function suggestedCourts(n) {
+  return Math.max(1, Math.min(Math.floor(n / 8) + 1, Math.floor(n / 4), 6));
+}
+
+function getPointsPerRound() {
+  return parseInt(el('pointsPerRound').value, 10) || 32;
 }
 
 function updateMatchInfo() {
-  const cellCount = document.querySelectorAll('#playerInputs .player-cell').length;
-  const courts = parseInt(document.getElementById('createCourts').value, 10);
-  const mode = document.getElementById('gameMode').value;
-  const infoEl = document.getElementById('matchInfo');
+  const N = document.querySelectorAll('#playerInputs .player-cell').length;
+  const courts = parseInt(el('createCourts').value, 10);
+  const pts = getPointsPerRound();
+  const serves = pts / 4;
 
-  if (cellCount < 4) { infoEl.style.display = 'none'; return; }
-
-  const N = cellCount;
   const courtsPerRound = Math.min(courts, Math.floor(N / 4));
   const numRounds = Math.min(Math.max(Math.ceil(N * (N - 1) / (4 * courtsPerRound)), 4), 20);
+  const resting = N - courtsPerRound * 4;
 
-  let text = `${numRounds} runder`;
-  if (mode === 'americano') {
-    const pts = parseInt(document.getElementById('pointsPerRound').value, 10) || 32;
-    const serves = pts / 4;
-    text += ` · ${pts} poeng per runde · ${Number.isInteger(serves) ? serves : '~' + serves.toFixed(1)} server per spiller`;
-  } else {
-    const matchesPerPlayer = Math.round(numRounds * 4 * courtsPerRound / N);
-    text += ` · ca. ${matchesPerPlayer} kamper per spiller`;
-  }
-
-  infoEl.style.display = 'block';
-  infoEl.textContent = text;
+  let text = `${numRounds} kamper hver runde`;
+  text += ` · ${Number.isInteger(serves) ? serves : '~' + serves.toFixed(1)} server per spiller`;
+  if (resting > 0) text += ` · ${resting} hviler per kamp`;
+  if (courts > courtsPerRound) text += ` · kun ${courtsPerRound} bane${courtsPerRound > 1 ? 'r' : ''} i bruk`;
+  el('servesInfo').textContent = text;
 }
 
 function updatePlayerCount() {
-  const cells = document.querySelectorAll('#playerInputs .player-cell');
-  const n = cells.length;
-  document.getElementById('playerCount').textContent = `${n} spillere`;
+  const n = document.querySelectorAll('#playerInputs .player-cell').length;
+  el('playerCount').textContent = `${n} spillere`;
 
-  // Enable/disable remove buttons (minimum 4)
+  // Minimum 4 players
   document.querySelectorAll('#playerInputs .player-remove')
     .forEach(btn => { btn.disabled = n <= 4; });
 
+  el('createCourts').value = String(suggestedCourts(n));
   updateMatchInfo();
 }
 
 function renumberCells() {
   document.querySelectorAll('#playerInputs .player-num')
-    .forEach((el, i) => { el.textContent = i + 1; });
+    .forEach((e, i) => { e.textContent = i + 1; });
   document.querySelectorAll('#playerInputs .player-input')
-    .forEach((el, i) => { if (!el.value) el.placeholder = `Spiller ${i + 1}`; });
+    .forEach((e, i) => { e.placeholder = `Spiller ${i + 1}`; });
 }
 
-function addPlayerCell(name = '') {
-  const container = document.getElementById('playerInputs');
+function addPlayerCell() {
+  const container = el('playerInputs');
   const num = container.querySelectorAll('.player-cell').length + 1;
 
   const div = document.createElement('div');
@@ -92,39 +84,34 @@ function addPlayerCell(name = '') {
   div.innerHTML = `
     <span class="player-num">${num}</span>
     <input type="text" class="player-input" placeholder="Spiller ${num}"
-           autocomplete="off" />
+           autocomplete="off" enterkeyhint="next" />
     <button type="button" class="player-remove" title="Fjern spiller" disabled>×</button>
   `;
 
-  if (name) div.querySelector('.player-input').value = name;
-
+  const input = div.querySelector('.player-input');
   div.querySelector('.player-remove').addEventListener('click', () => {
     div.remove();
     renumberCells();
     updatePlayerCount();
   });
-  div.querySelector('.player-input').addEventListener('input', updateMatchInfo);
+
+  // Enter → next field; on the last filled field, add a new one
+  input.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const inputs = [...container.querySelectorAll('.player-input')];
+    const next = inputs[inputs.indexOf(input) + 1];
+    if (next) next.focus();
+    else if (input.value.trim()) addPlayerCell().querySelector('.player-input').focus();
+  });
 
   container.appendChild(div);
   updatePlayerCount();
   return div;
 }
 
-function initPlayerCells() {
-  for (let i = 0; i < 4; i++) addPlayerCell();
-}
-
-/* ===== Helpers ===== */
-function initScores(players) {
-  const o = {};
-  for (const p of players) o[p] = 0;
-  return o;
-}
-
 /* ===== Create session ===== */
-async function createSession(numCourts) {
-  await firebaseReady;
-
+async function createSession() {
   const players = getPlayerNames();
   if (players.length < 4) {
     alert("Du trenger minst 4 spillere med navn.");
@@ -133,20 +120,26 @@ async function createSession(numCourts) {
 
   showView("viewLoading");
 
-  const seed = Date.now() >>> 0;
-  const { rounds } = buildSchedule(players, numCourts, seed);
+  try {
+    await firebaseReady;
+  } catch (err) {
+    console.error(err);
+    alert("Klarte ikke å koble til serveren. Sjekk nettet og prøv igjen.\n\n" + (err?.message || err));
+    showView("viewCreate");
+    return;
+  }
+
+  // Let the loading view paint before the (blocking) optimizer runs
+  await new Promise(r => setTimeout(r, 30));
+
+  const numCourts = parseInt(el("createCourts").value, 10);
+  const { rounds } = buildSchedule(players, numCourts, Date.now() >>> 0);
 
   if (!rounds.length) {
     alert("Klarte ikke å lage kampprogram. Sjekk antall spillere og baner.");
     showView("viewCreate");
     return;
   }
-
-  const cycleLength = rounds.length;
-  const mode = document.getElementById('gameMode').value;
-  const pointsPerRound = mode === 'americano'
-    ? (parseInt(document.getElementById('pointsPerRound').value, 10) || 32)
-    : 0;
 
   for (let attempt = 0; attempt < 10; attempt++) {
     const pin = generatePin6();
@@ -163,12 +156,12 @@ async function createSession(numCourts) {
           players,
           numCourts,
           rounds,
-          cycleLength,
-          mode,
-          pointsPerRound,
+          cycleLength: rounds.length,
+          mode: "americano",
+          pointsPerRound: getPointsPerRound(),
           currentRound: 0,
           winners: {},
-          scores: initScores(players),
+          scores: Object.fromEntries(players.map(p => [p, 0])),
           status: "active",
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -180,7 +173,7 @@ async function createSession(numCourts) {
     } catch (err) {
       if ((err?.message || "") === "PIN_COLLISION") continue;
       console.error(err);
-      alert(err?.message || "Noe gikk galt. Prøv igjen.");
+      alert("Klarte ikke å opprette kampen: " + (err?.message || err));
       showView("viewCreate");
       return;
     }
@@ -190,46 +183,27 @@ async function createSession(numCourts) {
   showView("viewCreate");
 }
 
-/* ===== Wiring ===== */
-window.addEventListener("load", () => {
-  initPlayerCells();
+/* ===== Wiring (module scripts run after the DOM is parsed) ===== */
+for (let i = 0; i < 4; i++) addPlayerCell();
 
-  document.getElementById("goCreateBtn").addEventListener("click", () => {
-    showView("viewCreate");
-    updateMatchInfo();
-  });
-  document.getElementById("goJoinBtn").addEventListener("click", () => showView("viewJoin"));
-  document.getElementById("createBackBtn").addEventListener("click", () => showView("viewHome"));
-  document.getElementById("joinBackBtn").addEventListener("click", () => showView("viewHome"));
+el("goCreateBtn").addEventListener("click", () => {
+  showView("viewCreate");
+  document.querySelector('#playerInputs .player-input')?.focus();
+});
+el("goJoinBtn").addEventListener("click", () => showView("viewJoin"));
+el("createBackBtn").addEventListener("click", () => showView("viewHome"));
+el("joinBackBtn").addEventListener("click", () => showView("viewHome"));
 
-  document.getElementById("addPlayerBtn").addEventListener("click", () => {
-    addPlayerCell();
-    const inputs = document.querySelectorAll('#playerInputs .player-input');
-    inputs[inputs.length - 1]?.focus();
-  });
+el("addPlayerBtn").addEventListener("click", () => {
+  addPlayerCell().querySelector('.player-input').focus();
+});
 
-  document.getElementById("createCourts").addEventListener("change", updateMatchInfo);
+el("createCourts").addEventListener("change", updateMatchInfo);
+el("pointsPerRound").addEventListener("input", updateMatchInfo);
+el("createStartBtn").addEventListener("click", createSession);
 
-  document.getElementById("gameMode").addEventListener("change", () => {
-    const isAmericano = document.getElementById('gameMode').value === 'americano';
-    document.getElementById('americanoOptions').style.display = isAmericano ? 'block' : 'none';
-    updateServesInfo();
-    updateMatchInfo();
-  });
-
-  document.getElementById("pointsPerRound").addEventListener("input", () => {
-    updateServesInfo();
-    updateMatchInfo();
-  });
-
-  document.getElementById("createStartBtn").addEventListener("click", async () => {
-    const courts = parseInt(document.getElementById("createCourts").value, 10);
-    await createSession(courts);
-  });
-
-  document.getElementById("joinStartBtn").addEventListener("click", () => {
-    const pin = document.getElementById("joinPin").value.trim();
-    if (!pin) { alert("Skriv inn PIN."); return; }
-    window.location.href = `./match.html#pin=${pin}`;
-  });
+el("joinStartBtn").addEventListener("click", () => {
+  const pin = el("joinPin").value.trim();
+  if (!pin) { alert("Skriv inn PIN."); return; }
+  window.location.href = `./match.html#pin=${pin}`;
 });
