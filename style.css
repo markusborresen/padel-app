@@ -1,14 +1,28 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 /* ===== Base ===== */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
 body {
   font-family: 'Inter', -apple-system, system-ui, Segoe UI, Roboto, Arial, sans-serif;
   margin: 0;
   padding: 24px 16px;
+  padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+           max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   background: #f8fafc;
   box-sizing: border-box;
   min-height: 100vh;
+  min-height: 100dvh;
 }
+
+/* Fjern 300ms tap-forsinkelse / dobbelttrykk-zoom på interaktive elementer */
+a, button, label, input, select, textarea, .btn, .winbtn, .score-btn {
+  touch-action: manipulation;
+}
+button, .btn, .winbtn, .score-btn { -webkit-user-select: none; user-select: none; }
 .card {
   border: none;
   border-radius: 20px;
@@ -32,11 +46,12 @@ h2 { font-size: 15px; font-weight: 600; margin: 16px 0 6px 0; color: #374151; }
 label { font-size: 12px; font-weight: 500; color: #374151; display: block; margin-bottom: 4px; }
 input[type="text"],
 input[type="password"],
+input[type="number"],
 select {
   padding: 9px 12px;
   border: 1.5px solid #e5e7eb;
   border-radius: 10px;
-  font-size: 14px;
+  font-size: 16px; /* <16px får iOS til å zoome inn ved fokus */
   font-family: inherit;
   background: #fff;
   outline: none;
@@ -44,6 +59,7 @@ select {
 }
 input[type="text"]:focus,
 input[type="password"]:focus,
+input[type="number"]:focus,
 select:focus { border-color: #16a34a; }
 textarea {
   width: 100%;
@@ -52,7 +68,7 @@ textarea {
   padding: 10px 12px;
   border: 1.5px solid #e5e7eb;
   border-radius: 10px;
-  font-size: 14px;
+  font-size: 16px;
   font-family: inherit;
   box-sizing: border-box;
   outline: none;
@@ -75,14 +91,11 @@ textarea:focus { border-color: #16a34a; }
   text-decoration: none;
   color: #111;
   line-height: 1;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
-.btn:hover { background: #f3f4f6; border-color: #d1d5db; }
-.btn:active { transform: translateY(1px); }
+.btn:active:not(:disabled) { transform: scale(0.97); }
 .btn.primary { border-color: #16a34a; background: #16a34a; color: #fff; }
-.btn.primary:hover { background: #15803d; border-color: #15803d; }
 .btn.danger  { border-color: #dc2626; background: #dc2626; color: #fff; }
-.btn.danger:hover { background: #b91c1c; border-color: #b91c1c; }
 .btn.big     { padding: 14px 22px; font-size: 15px; border-radius: 14px; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -147,10 +160,10 @@ textarea:focus { border-color: #16a34a; }
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 .winradio:checked + .winbtn { background: #16a34a; color: #fff; border-color: #16a34a; }
-.winbtn:active { transform: translateY(1px); }
+.winbtn:active { transform: scale(0.96); }
 
 /* ===== Match: resting players ===== */
 .resting {
@@ -229,14 +242,13 @@ textarea:focus { border-color: #16a34a; }
   font-weight: 600;
   font-family: inherit;
   color: #111;
-  transition: all 0.12s ease;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease, transform 0.1s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
 }
-.score-btn:hover  { background: #f0fdf4; border-color: #86efac; }
-.score-btn:active { transform: translateY(1px); }
+.score-btn:active:not(:disabled) { transform: scale(0.94); }
 .score-btn.selected { background: #16a34a; color: #fff; border-color: #16a34a; }
 .score-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .americano-loser-text { margin-top: 8px; font-size: 13px; }
@@ -293,14 +305,27 @@ textarea:focus { border-color: #16a34a; }
   padding: 2px 6px;
   flex-shrink: 0;
   border-radius: 6px;
-  transition: color 0.15s;
+  transition: color 0.15s, transform 0.1s ease;
 }
-.player-remove:hover:not(:disabled) { color: #ef4444; }
+.player-remove:active { color: #ef4444; transform: scale(0.9); }
 .player-remove:disabled { opacity: 0; cursor: default; pointer-events: none; }
+
+/* ===== Hover kun for enheter med mus (unngår "fast" hover etter trykk på touch) ===== */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover:not(:disabled) { background: #f3f4f6; border-color: #d1d5db; }
+  .btn.primary:hover:not(:disabled) { background: #15803d; border-color: #15803d; }
+  .btn.danger:hover:not(:disabled)  { background: #b91c1c; border-color: #b91c1c; }
+  .score-btn:hover:not(:disabled):not(.selected) { background: #f0fdf4; border-color: #86efac; }
+  .player-remove:hover:not(:disabled) { color: #ef4444; }
+}
 
 /* ===== Responsive ===== */
 @media (max-width: 520px) {
-  body { padding: 12px; }
+  body {
+    padding: 12px;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+             max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
   .card { padding: 18px 16px; border-radius: 16px; }
   textarea { max-width: 100%; height: 140px; }
   .winseg { max-width: 260px; gap: 12px; }
