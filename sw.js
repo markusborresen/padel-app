@@ -1,4 +1,4 @@
-const VERSION = 'padelplan-v8';
+const VERSION = 'padelplan-v10';
 const ASSETS = [
   '/padel-app/',
   '/padel-app/index.html',

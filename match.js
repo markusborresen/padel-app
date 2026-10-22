@@ -23,8 +23,25 @@ let STATUS = "active";
 let CYCLE_LENGTH = 0;
 let POINTS_PER_ROUND = 32;
 
+let RENDERED_ROUND = null; // last round drawn – entrance animation only runs when it changes
+
 /* ===== DOM helpers ===== */
 const el = id => document.getElementById(id);
+
+/* ===== Motion (same curves as --ease-out / --ease-in-out in style.css) ===== */
+const EASE_OUT = "cubic-bezier(0.23, 1, 0.32, 1)";
+const EASE_IN_OUT = "cubic-bezier(0.77, 0, 0.175, 1)";
+const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Fade in (and nudge from dx/dy unless reduced motion)
+function enter(node, { dx = 0, dy = 0, duration = 220, delay = 0 } = {}) {
+  const still = reducedMotion();
+  const from = still || (!dx && !dy) ? "none" : `translate(${dx}px, ${dy}px)`;
+  node.animate(
+    [{ opacity: 0, transform: from }, { opacity: 1, transform: "none" }],
+    { duration, delay: still ? 0 : delay, easing: EASE_OUT, fill: "backwards" }
+  );
+}
 
 const roundDone = i => isRoundComplete(ROUNDS[i], i, WINNERS, POINTS_PER_ROUND);
 const hasFinale = () => ROUNDS.some(r => r.final);
@@ -46,6 +63,11 @@ function renderRoundNav() {
 }
 
 function renderCurrentRound() {
+  // Snapshots re-render on every score; only animate when the round actually changes
+  const dir = RENDERED_ROUND === null || RENDERED_ROUND === CURRENT_ROUND
+    ? 0 : Math.sign(CURRENT_ROUND - RENDERED_ROUND);
+  RENDERED_ROUND = CURRENT_ROUND;
+
   const container = el("courtsContainer");
   container.innerHTML = "";
 
@@ -149,7 +171,9 @@ function renderCurrentRound() {
         wLabelEl.textContent = `${w === "A" ? nameA : nameB} vant`;
         lLabelEl.textContent = "";
         scoreBtns.forEach(({ btn }) => btn.classList.remove("selected"));
+        const wasHidden = scoreRow.style.display === "none";
         scoreRow.style.display = "block";
+        if (wasHidden) enter(scoreRow, { dy: -4, duration: 180 });
       };
 
       radioA.addEventListener("change", onWinnerChange);
@@ -157,6 +181,7 @@ function renderCurrentRound() {
     }
 
     container.appendChild(card);
+    if (dir) enter(card, { dx: dir * 16, delay: courtIdx * 40 });
   });
 
   const resting = PLAYERS.filter(p => !activePlayers.has(p));
@@ -191,12 +216,47 @@ function renderScores() {
   }
 
   const entries = Object.entries(SCORES).sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]));
-  el("scores").innerHTML = entries
+  const list = el("scores");
+
+  // FLIP: remember each player's row position and points before re-rendering
+  // (relative to the list, since the courts above may change height in the same render)
+  const posOf = row => {
+    const r = row.getBoundingClientRect(), l = list.getBoundingClientRect();
+    return { x: r.left - l.left, y: r.top - l.top };
+  };
+  const before = new Map([...list.children].map(row =>
+    [row.dataset.player, { ...posOf(row), pts: row.dataset.pts }]
+  ));
+
+  list.innerHTML = entries
     .map(([p, pts]) => {
       const tag = extra.has(p) ? ` <span class="extra-tag">+${counts[p] - min} kamp</span>` : "";
       return `<div class="score-row"><span class="pill">${pts}</span>${p}${tag}</div>`;
     })
     .join("");
+
+  [...list.children].forEach((row, i) => {
+    const [player, pts] = entries[i];
+    row.dataset.player = player;
+    row.dataset.pts = pts;
+
+    const prev = before.get(player);
+    if (!prev) return;
+    const now = posOf(row);
+    const dx = prev.x - now.x, dy = prev.y - now.y;
+    if ((dx || dy) && !reducedMotion()) {
+      row.animate(
+        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }],
+        { duration: 300, easing: EASE_IN_OUT }
+      );
+    }
+    if (prev.pts !== String(pts)) {
+      row.querySelector(".pill").animate(
+        [{ backgroundColor: "#dcfce7", borderColor: "#86efac" }, {}],
+        { duration: 900, easing: "ease" }
+      );
+    }
+  });
 }
 
 function hydrate(data) {
