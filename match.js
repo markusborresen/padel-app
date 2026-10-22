@@ -25,6 +25,10 @@ let POINTS_PER_ROUND = 32;
 
 let RENDERED_ROUND = null; // last round drawn – entrance animation only runs when it changes
 
+// Local picks not yet in Firestore, so a snapshot re-render doesn't wipe them.
+// "round:court" -> { w: "A"|"B", pts: number|null, base: JSON of WINNERS[key] when picked }
+let PENDING_WINNER = {};
+
 /* ===== DOM helpers ===== */
 const el = id => document.getElementById(id);
 
@@ -66,6 +70,7 @@ function renderCurrentRound() {
   // Snapshots re-render on every score; only animate when the round actually changes
   const dir = RENDERED_ROUND === null || RENDERED_ROUND === CURRENT_ROUND
     ? 0 : Math.sign(CURRENT_ROUND - RENDERED_ROUND);
+  if (RENDERED_ROUND !== CURRENT_ROUND) PENDING_WINNER = {};
   RENDERED_ROUND = CURRENT_ROUND;
 
   const container = el("courtsContainer");
@@ -80,10 +85,19 @@ function renderCurrentRound() {
     const card = document.createElement("div");
     card.className = "court-card";
 
-    const saved = WINNERS[`${CURRENT_ROUND}:${courtIdx}`]; // {a, b} or undefined
+    const key   = `${CURRENT_ROUND}:${courtIdx}`;
+    const saved = WINNERS[key]; // {a, b} or undefined
+    const base  = JSON.stringify(saved ?? null);
+    // A pending pick only survives while the saved value is unchanged (saved value wins)
+    if (PENDING_WINNER[key]?.base !== base) delete PENDING_WINNER[key];
+    const pending = PENDING_WINNER[key];
+
     let initWinner = null;
     let initPts    = null;
-    if (saved && typeof saved === "object") {
+    if (pending) {
+      initWinner = pending.w;
+      initPts    = pending.pts;
+    } else if (saved && typeof saved === "object") {
       initWinner = saved.a >= saved.b ? "A" : "B";
       initPts    = initWinner === "A" ? saved.a : saved.b;
     }
@@ -123,7 +137,9 @@ function renderCurrentRound() {
     const lLabelEl = card.querySelector(`#${idRow}_llabel`);
     if (initWinner) {
       wLabelEl.textContent = `${initWinner === "A" ? nameA : nameB} vant`;
-      lLabelEl.textContent = `${initWinner === "A" ? nameB : nameA} får ${POINTS_PER_ROUND - initPts} poeng`;
+      if (initPts !== null) {
+        lLabelEl.textContent = `${initWinner === "A" ? nameB : nameA} får ${POINTS_PER_ROUND - initPts} poeng`;
+      }
     }
 
     // Tap-able score buttons: from tied score (ceil(max/2)) up to max
@@ -157,8 +173,13 @@ function renderCurrentRound() {
         lLabelEl.textContent = `${w === "A" ? nameB : nameA} får ${loserPts} poeng`;
         const aScore = w === "A" ? pts : loserPts;
         const bScore = w === "A" ? loserPts : pts;
+        // Keep the pick across snapshots until our own write lands (it then changes base)
+        PENDING_WINNER[key] = { w, pts, base };
         try { await setAmericanoScore(ri, ci, aScore, bScore); }
-        catch (err) { console.error(err); }
+        catch (err) {
+          console.error(err);
+          if (PENDING_WINNER[key]) PENDING_WINNER[key].pts = null;
+        }
       };
 
       scoreBtns.forEach(({ btn, pts }) =>
@@ -168,6 +189,7 @@ function renderCurrentRound() {
       const onWinnerChange = () => {
         const w = getWinner();
         if (!w) { scoreRow.style.display = "none"; return; }
+        PENDING_WINNER[key] = { w, pts: null, base };
         wLabelEl.textContent = `${w === "A" ? nameA : nameB} vant`;
         lLabelEl.textContent = "";
         scoreBtns.forEach(({ btn }) => btn.classList.remove("selected"));
